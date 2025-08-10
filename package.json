@@ -12,6 +12,8 @@
   },
   "scripts": {
     "build": "tsm rules.ts",
-    "watch": "nodemon --exec yarn build -e ts"
+    "watch": "nodemon --exec yarn build -e ts",
+    "start": "node visualizer/server/index.mjs",
+    "visualizer": "node visualizer/server/index.mjs"
   }
 }

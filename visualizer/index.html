@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karabiner Configuration Editor</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Karabiner Configuration Editor</h1>
+    <p>Visual editor for your Hyper key configuration</p>
+    <div class="header-actions">
+      <button id="save-config" class="btn-primary">Save Configuration</button>
+      <button id="add-layer" class="btn-secondary">Add Layer</button>
+    </div>
+  </header>
+  
+  <main>
+    <section class="panel">
+      <h2>Base Hyper Anchors</h2>
+      <div class="filter-bar">
+        <button class="filter-item" data-filter="all">All</button>
+        <button class="filter-item" data-filter="sublayer">Sublayers</button>
+        <button class="filter-item" data-filter="custom">Custom</button>
+        <button class="filter-item" data-filter="available">Available</button>
+        <button class="filter-item" data-filter="thirdparty">3rd Party</button>
+      </div>
+      <div id="base-grid" class="key-grid"></div>
+      <div id="base-highlights"></div>
+    </section>
+    
+    <section class="panel">
+      <h2>Configuration</h2>
+      <div id="detail" class="empty">
+        <p>Select a key to edit its configuration</p>
+      </div>
+    </section>
+  </main>
+  
+  <!-- Layer Editor Modal -->
+  <div id="layer-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-title">Add New Layer</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="layer-form">
+          <div class="form-group">
+            <label for="layer-key">Layer Key:</label>
+            <select id="layer-key" required>
+              <option value="">Select a key...</option>
+            </select>
+          </div>
+          <div id="command-text-group" class="form-group hidden">
+            <label for="layer-command-text">Command:</label>
+            <input type="text" id="layer-command-text" placeholder="e.g., Comet or top-left or echo hi">
+          </div>
+          <div class="form-group">
+            <label>Layer Type:</label>
+            <div class="radio-group">
+              <label><input type="radio" name="layer-type" value="sublayer" checked> Sublayer</label>
+              <label><input type="radio" name="layer-type" value="command"> Single Command</label>
+            </div>
+          </div>
+          <div id="command-section" class="form-section hidden">
+            <h4>Command Configuration</h4>
+            <div class="form-group">
+              <label for="command-type">Command Type:</label>
+              <select id="command-type">
+                <option value="key" disabled>Key Press (coming soon)</option>
+                <option value="app">Open App</option>
+                <option value="shell">Shell Command</option>
+                <option value="window">Window</option>
+              </select>
+            </div>
+            <div id="command-config"></div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="cancel-layer">Cancel</button>
+            <button type="submit" class="btn-primary">Save Layer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Command Editor Modal -->
+  <div id="command-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="command-modal-title">Edit Command</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="command-form">
+          <div class="form-group">
+            <label for="command-key">Key:</label>
+            <select id="command-key" required>
+              <option value="">Select a key...</option>
+            </select>
+          </div>
+          <div class="form-group" id="cmd-text-group">
+            <label for="cmd-command-text">Command:</label>
+            <input type="text" id="cmd-command-text" placeholder="e.g., Comet or top-left or echo hi">
+          </div>
+          <div class="form-group">
+            <label for="cmd-type">Command Type:</label>
+            <select id="cmd-type">
+              <option value="key" disabled>Key Press (coming soon)</option>
+              <option value="app">Open App</option>
+              <option value="shell">Shell Command</option>
+              <option value="window">Window</option>
+            </select>
+          </div>
+          <div id="cmd-config"></div>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="cancel-command">Cancel</button>
+            <button type="submit" class="btn-primary">Save Command</button>
+            <button type="button" class="btn-danger" id="delete-command">Delete</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/app.js"></script>
+</body>
+</html>

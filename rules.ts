@@ -1,6 +1,6 @@
 import fs from "fs";
 import { KarabinerRules } from "./types";
-import { createHyperSubLayers, app, open, window } from "./utils";
+import { createHyperSubLayers, app, open, window, shell } from "./utils";
 
 const rules: KarabinerRules[] = [
   // Define the Hyper key itself
@@ -40,83 +40,65 @@ const rules: KarabinerRules[] = [
       },
     ],
   },
-  ...createHyperSubLayers({ 
-
-    h: { to: [{ key_code: "left_arrow" }] },
-    j: { to: [{ key_code: "down_arrow" }] },
-    k: { to: [{ key_code: "up_arrow" }] },
-    l: { to: [{ key_code: "right_arrow" }] },
-    m: { to: [{ key_code: "left_arrow", modifiers: ["left_command"] }] },
-    comma: { to: [{ key_code: "left_arrow", modifiers: ["left_alt"] }] },
-    period: { to: [{ key_code: "right_arrow", modifiers: ["left_alt"] }] },
-    slash: { to: [{ key_code: "right_arrow", modifiers: ["left_command"] }] },
-    semicolon: { to: [{ key_code: "delete_or_backspace", modifiers: ["left_alt"] }] },
-    quote: { to: [{ key_code: "delete_forward" }] },
-
-
-    c: open("-g raycast://extensions/raycast/clipboard-history/clipboard-history"),   
-
-    // All window-commands
+  ...createHyperSubLayers({
+    1: {
+      1: app('Comet'),
+      w: window('center')
+    },
+    2: {
+      5: window('Bottom Third')
+    },
+    5: {
+    },
+    h: { to: [{ key_code: 'left_arrow', modifiers: [] }] },
+    j: { to: [{ key_code: 'down_arrow', modifiers: [] }] },
+    k: { to: [{ key_code: 'up_arrow', modifiers: [] }] },
+    l: { to: [{ key_code: 'right_arrow', modifiers: [] }] },
+    m: { to: [{ key_code: 'left_arrow', modifiers: ['left_command'] }] },
+    comma: { to: [{ key_code: 'left_arrow', modifiers: ['left_alt'] }] },
+    period: { to: [{ key_code: 'right_arrow', modifiers: ['left_alt'] }] },
+    slash: { to: [{ key_code: 'right_arrow', modifiers: ['left_command'] }] },
+    semicolon: { to: [{ key_code: 'delete_or_backspace', modifiers: ['left_alt'] }] },
+    quote: { to: [{ key_code: 'delete_forward', modifiers: [] }] },
+    c: open('-g raycast://extensions/raycast/clipboard-history/clipboard-history'),
     w: {
-      // Restore / maximize / center
-      r: window('restore'),
+      1: window('previous-display'),
+      r: { to: [{ key_code: 'escape', modifiers: [] }], description: 'Window: restor' },
       k: window('maximize'),
       c: window('center'),
       f: window('center-half'),
-
-      // Vim-like halves and directions
       e: window('top-half'),
       d: window('bottom-half'),
       j: window('left-half'),
       semicolon: window('right-half'),
-
-      // Corners (top row left->right, then bottom row left->right)
       i: window('top-left'),
       o: window('top-right'),
       u: window('bottom-left'),
       p: window('bottom-right'),
-
-      // Resize
       comma: window('smaller'),
       period: window('larger'),
-
-      // Vertical layouts / ratios
-      g: open('-g raycast://extensions/raycast/window-management/top-center-two-thirds'),
+      g: window('top-center-two-thirds'),
       n: window('top-center-sixth'),
       m: window('bottom-center-sixth'),
-
-      // Displays / movement
-      1: window('previous-display'),
-      t: window('move-up'),
+      t: window('move-up')
     },
-
-
-    // o = "Open" applications
     o: {
-      // Apps
-      c: app("Comet"),
-      t: app("Trae"),
-      g: app("Ghostty"),
-      m: app("Messages"),
-      s: app("Spotify"),
-      e: app("Mail"), // Email
-      p: app("Passwords"),
-
+      c: app('Comet'),
+      t: app('Trae'),
+      g: app('Ghostty'),
+      m: app('Messages'),
+      s: app('Spotify'),
+      e: app('Mail'),
+      p: app('Passwords')
     },
-
-
-
-    // r = "Raycast"
-    		r: {
-		  e: open("raycast://extensions/raycast/emoji-symbols/search-emoji-symbols"),
-		  a: open("-g raycast://extensions/raycast/raycast-ai/ai-chat"),
-		  s: open("-g raycast://extensions/raycast/file-search/search-files"),
-		  k: open("raycast://extensions/raycast/calendar/my-schedule"),
-		  n: open("-g raycast://extensions/raycast/raycast-notes/raycast-notes"),
-		  o: open("-g raycast://extensions/huzef44/screenocr/recognize-text"), 
-		},
-
-
+    r: {
+      e: open('raycast://extensions/raycast/emoji-symbols/search-emoji-symbols'),
+      a: open('-g raycast://extensions/raycast/raycast-ai/ai-chat'),
+      s: open('-g raycast://extensions/raycast/file-search/search-files'),
+      k: open('raycast://extensions/raycast/calendar/my-schedule'),
+      n: open('-g raycast://extensions/raycast/raycast-notes/raycast-notes'),
+      o: open('-g raycast://extensions/huzef44/screenocr/recognize-text')
+    }
   }),
 ];
 
