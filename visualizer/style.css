@@ -79,6 +79,14 @@ main {
   color: var(--text);
   letter-spacing: -0.01em;
 }
+
+/* Actions row inside panel (Save / Add Layer) */
+.panel-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 0 16px;
+}
 .filter-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -105,10 +113,12 @@ main {
   box-shadow: var(--shadow-sm);
 }
 
+/* Improve contrast when active: use dark text and subtle accent border */
 .filter-item.active {
-  color: white;
-  border-color: transparent;
-  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 .filter-item.taken.active { background: var(--danger); }

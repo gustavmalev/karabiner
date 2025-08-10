@@ -83,6 +83,8 @@ const utils = {
     return label.length > 2 ? code : label;
   },
 
+  
+
   toTitleCase: (s) => {
     const text = String(s || '').replace(/_/g, ' ');
     return text.charAt(0).toUpperCase() + text.slice(1);
@@ -90,12 +92,14 @@ const utils = {
 
   markDirty: () => {
     appState.isDirty = true;
-    document.getElementById('save-config').textContent = 'Save Configuration *';
+    // Refresh actions area to show Save button
+    try { ui.renderActions(); } catch {}
   },
 
   markClean: () => {
     appState.isDirty = false;
-    document.getElementById('save-config').textContent = 'Save Configuration';
+    // Refresh actions area to hide Save button
+    try { ui.renderActions(); } catch {}
   }
 };
 
@@ -456,6 +460,31 @@ const ui = {
     }, 2000);
   },
 
+  // Render action buttons inside the Base panel
+  renderActions() {
+    const container = document.getElementById('base-actions');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Save button (only when dirty)
+    if (appState.isDirty) {
+      const saveBtn = document.createElement('button');
+      saveBtn.id = 'save-config';
+      saveBtn.className = 'btn-primary';
+      saveBtn.textContent = 'Save Configuration *';
+      saveBtn.addEventListener('click', () => this.saveConfiguration());
+      container.appendChild(saveBtn);
+    }
+
+    // Add Layer button (always shown)
+    const addBtn = document.createElement('button');
+    addBtn.id = 'add-layer';
+    addBtn.className = 'btn-secondary';
+    addBtn.textContent = 'Add Layer';
+    addBtn.addEventListener('click', () => this.addLayer());
+    container.appendChild(addBtn);
+  },
+
   // Ensure command UI is only visible for 'Single Command'
   syncLayerTypeVisibility() {
     const commandSection = document.getElementById('command-section');
@@ -793,6 +822,7 @@ const ui = {
       
       renderer.renderBaseGrid();
       this.setupFilterButtons();
+      this.renderActions();
     } catch (error) {
       console.error('Failed to load data:', error);
       this.showToast('Failed to load configuration', 'error');
@@ -836,9 +866,7 @@ function setupEventHandlers() {
     });
   });
   
-  // Header buttons
-  document.getElementById('save-config').addEventListener('click', () => ui.saveConfiguration());
-  document.getElementById('add-layer').addEventListener('click', () => ui.addLayer());
+  // Action buttons are rendered dynamically in ui.renderActions()
   
   // Layer form
   document.getElementById('layer-form').addEventListener('submit', async (e) => {
@@ -971,6 +999,7 @@ function setupEventHandlers() {
 async function main() {
   try {
     setupEventHandlers();
+    ui.renderActions(); // initial render (clean state)
     await ui.loadData();
     
     console.log('Karabiner Configuration Editor initialized');

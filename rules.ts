@@ -43,10 +43,12 @@ const rules: KarabinerRules[] = [
   ...createHyperSubLayers({
     1: {
       1: app('Comet'),
+      9: window('left-half'),
       w: window('center')
     },
     2: {
-      5: window('Bottom Third')
+      2: window('center-half'),
+      5: window('bottom-third')
     },
     5: {
     },
