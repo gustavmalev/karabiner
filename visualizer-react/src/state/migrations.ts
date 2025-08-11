@@ -9,6 +9,23 @@ const migrations: Record<number, (input: Record<string, unknown>) => Record<stri
     const blocked = typeof (s as any).blockedKeys === 'object' && (s as any).blockedKeys !== null ? (s as any).blockedKeys : {};
     return { ...s, blockedKeys: blocked, schemaVersion: 2 } as Record<string, unknown>;
   },
+  // 2 -> 3: add lastSavedAt (null) and snapshots ([])
+  2: (s) => {
+    const withDefaults = {
+      ...s,
+      lastSavedAt: null,
+      snapshots: Array.isArray((s as any).snapshots) ? (s as any).snapshots : [],
+      schemaVersion: 3,
+    } as Record<string, unknown>;
+    return withDefaults;
+  },
+  // 3 -> 4: add settings with showUndoRedo default true
+  3: (s) => {
+    const settings = typeof (s as any).settings === 'object' && (s as any).settings !== null
+      ? (s as any).settings
+      : { showUndoRedo: true };
+    return { ...s, settings, schemaVersion: 4 } as Record<string, unknown>;
+  },
 };
 
 export function migrateToLatest(raw: unknown): Persisted {

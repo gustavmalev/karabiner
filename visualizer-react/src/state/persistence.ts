@@ -30,6 +30,9 @@ export function buildPersisted(input: {
   keyboardLayout: Persisted['keyboardLayout'];
   aiKey: Persisted['aiKey'];
   blockedKeys: Persisted['blockedKeys'];
+  lastSavedAt?: Persisted['lastSavedAt'];
+  snapshots?: Persisted['snapshots'];
+  settings?: Persisted['settings'];
 }): Persisted {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -39,6 +42,9 @@ export function buildPersisted(input: {
     keyboardLayout: input.keyboardLayout,
     aiKey: input.aiKey ?? '',
     blockedKeys: input.blockedKeys ?? {},
+    lastSavedAt: input.lastSavedAt ?? null,
+    snapshots: input.snapshots ?? [],
+    settings: input.settings ?? { showUndoRedo: true },
   };
 }
 

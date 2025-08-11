@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
-import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@heroui/react';
+import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
 import { useStore } from '../state/store';
 import { saveConfig } from '../api/client';
 import { ImportDialog } from '../features/import/ImportDialog';
-import { buildPersisted, exportJson } from '../state/persistence';
+import { FileMenu } from './menus/FileMenu';
+import { HistoryMenu } from './menus/HistoryMenu';
+import { SettingsDialog } from './SettingsDialog';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const config = useStore((s) => s.config);
-  const locks = useStore((s) => s.locks);
-  const filter = useStore((s) => s.filter);
-  const keyboardLayout = useStore((s) => s.keyboardLayout);
-  const aiKey = useStore((s) => s.aiKey);
-  const blockedKeys = useStore((s) => s.blockedKeys);
   const isDirty = useStore((s) => s.isDirty);
+  const lastSavedAt = useStore((s) => s.lastSavedAt);
   const markSaved = useStore((s) => s.markSaved);
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const revertToSaved = useStore((s) => s.revertToSaved);
   const historyCount = useStore((s) => s.history.length);
   const futureCount = useStore((s) => s.future.length);
-  const [importOpen, setImportOpen] = useState(false);
+  const importOpen = useStore((s) => s.importDialogOpen);
+  const closeImportDialog = useStore((s) => s.closeImportDialog);
+  const showUndoRedo = useStore((s) => s.settings.showUndoRedo);
 
   async function onSave() {
     if (!config) return;
@@ -32,49 +33,60 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function onExport() {
-    if (!config) return;
-    const p = buildPersisted({ config, locks, filter, keyboardLayout, aiKey, blockedKeys });
-    exportJson(p);
+  function timeAgo(ts: number | null): string {
+    if (!ts) return '';
+    const diff = Math.max(0, Date.now() - ts);
+    const s = Math.floor(diff / 1000);
+    if (s < 5) return 'just now';
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    return `${h}h ago`;
   }
 
   return (
     <div className="min-h-screen light bg-background text-foreground">
       <Navbar maxWidth="2xl" isBordered>
         <NavbarBrand>
-          <h1 className="text-base font-semibold">Visualizer</h1>
+          <h1
+            className="text-base font-semibold cursor-pointer select-none"
+            title="Open settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Visualizer
+          </h1>
         </NavbarBrand>
         <NavbarContent justify="end" className="gap-2">
-          {historyCount > 0 && (
+          <HistoryMenu />
+          <FileMenu />
+          {showUndoRedo && historyCount > 0 && (
             <Tooltip content="Undo (Cmd/Ctrl+Z)" placement="bottom">
               <div className="inline-block">
                 <Button size="sm" variant="flat" onPress={() => undo()}>
-                  Undo {historyCount ? `(${historyCount})` : ''}
+                  <span>Undo</span>
+                  {historyCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center rounded-full bg-default-200 text-foreground/80 text-[10px] h-4 min-w-4 px-1">{historyCount}</span>
+                  )}
                 </Button>
               </div>
             </Tooltip>
           )}
-          {futureCount > 0 && (
+          {showUndoRedo && futureCount > 0 && (
             <Tooltip content="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)" placement="bottom">
               <div className="inline-block">
                 <Button size="sm" variant="flat" onPress={() => redo()}>
-                  Redo {futureCount ? `(${futureCount})` : ''}
+                  <span>Redo</span>
+                  {futureCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center rounded-full bg-default-200 text-foreground/80 text-[10px] h-4 min-w-4 px-1">{futureCount}</span>
+                  )}
                 </Button>
               </div>
             </Tooltip>
           )}
-          <Dropdown>
-            <DropdownTrigger>
-              <Button size="sm" variant="flat">File</Button>
-            </DropdownTrigger>
-            <DropdownMenu aria-label="File menu" onAction={(key) => {
-              if (key === 'import') setImportOpen(true);
-              else if (key === 'export') onExport();
-            }}>
-              <DropdownItem key="import">Import…</DropdownItem>
-              <DropdownItem key="export" isDisabled={!config}>Export</DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
+          <div className="hidden sm:block text-xs text-default-500 mr-2 select-none">
+            {isDirty ? 'Unsaved changes' : (lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}` : '')}
+          </div>
           <Tooltip content="Save changes" placement="bottom">
             <div className="inline-block">
               <Button variant="solid" color="primary" isDisabled={!isDirty} onPress={onSave}>
@@ -92,7 +104,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </NavbarContent>
       </Navbar>
       <main className="mx-auto max-w-screen-2xl p-4 md:p-6">{children}</main>
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportDialog open={importOpen} onClose={() => closeImportDialog()} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

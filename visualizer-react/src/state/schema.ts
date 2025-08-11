@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Command, Config, Layer } from '../types';
 
 // Persisted schema version. Increment when making breaking changes to persisted shape.
-export const SCHEMA_VERSION = 2 as const;
+export const SCHEMA_VERSION = 4 as const;
 
 // Zod schemas mirroring our runtime types
 export const zKeyCode = z.string();
@@ -36,6 +36,17 @@ export const zConfig: z.ZodType<Config> = z.object({
 export const zFilter = z.enum(['all', 'available', 'sublayer', 'custom', 'thirdparty']);
 export const zKeyboardLayout = z.enum(['ansi', 'iso']);
 
+export const zSnapshot = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.number().int().nonnegative(),
+  config: zConfig.nullable(),
+});
+
+export const zSettings = z.object({
+  showUndoRedo: z.boolean().default(true),
+});
+
 export const zPersisted = z.object({
   schemaVersion: z.number().int().nonnegative(),
   config: zConfig,
@@ -44,6 +55,9 @@ export const zPersisted = z.object({
   keyboardLayout: zKeyboardLayout,
   aiKey: z.string().default(''),
   blockedKeys: z.record(zKeyCode, z.boolean()).default({}),
+  lastSavedAt: z.number().int().nonnegative().nullable().default(null),
+  snapshots: z.array(zSnapshot).default([]),
+  settings: zSettings.default({ showUndoRedo: true }),
   // Present on exported artifacts
   exportedAt: z.string().datetime().optional(),
 });

@@ -8,11 +8,19 @@ type StoreSnapshot = {
   config: Config | null;
 };
 
+export type NamedSnapshot = {
+  id: string;
+  name: string;
+  createdAt: number;
+  config: Config | null;
+};
+
 export type StoreState = {
   // data
   data: Data | null;
   config: Config | null;
   lastSavedConfig: Config | null;
+  lastSavedAt: number | null;
   apps: AppInfo[];
   // ui
   currentLayerKey: KeyCode | null;
@@ -23,10 +31,17 @@ export type StoreState = {
   aiKey: string;
   // status
   isDirty: boolean;
+  // dialogs
+  importDialogOpen: boolean;
   // history
   history: StoreSnapshot[];
   future: StoreSnapshot[];
   historyLimit: number;
+  // named snapshots (separate from undo/redo)
+  snapshots: NamedSnapshot[];
+  snapshotsLimit: number;
+  // settings
+  settings: { showUndoRedo: boolean };
 
   // actions
   setData: (data: Data) => void;
@@ -40,15 +55,22 @@ export type StoreState = {
   setAIKey: (aiKey: string) => void;
   markDirty: () => void;
   markSaved: () => void;
+  openImportDialog: () => void;
+  closeImportDialog: () => void;
   undo: () => void;
   redo: () => void;
   revertToSaved: () => void;
+  createSnapshot: (name: string) => void;
+  revertToSnapshot: (id: string) => void;
+  deleteSnapshot: (id: string) => void;
+  setSettings: (patch: Partial<{ showUndoRedo: boolean }>) => void;
 };
 
 type StoreBase = {
   data: Data | null;
   config: Config | null;
   lastSavedConfig: Config | null;
+  lastSavedAt: number | null;
   apps: AppInfo[];
   currentLayerKey: KeyCode | null;
   filter: Filter;
@@ -57,15 +79,20 @@ type StoreBase = {
   keyboardLayout: KeyboardLayout;
   aiKey: string;
   isDirty: boolean;
+  importDialogOpen: boolean;
   history: StoreSnapshot[];
   future: StoreSnapshot[];
   historyLimit: number;
+  snapshots: NamedSnapshot[];
+  snapshotsLimit: number;
+  settings: { showUndoRedo: boolean };
 };
 
 const initial = (): StoreBase => ({
   data: null,
   config: null,
   lastSavedConfig: null,
+  lastSavedAt: null,
   apps: [],
   currentLayerKey: null,
   filter: 'all',
@@ -74,9 +101,13 @@ const initial = (): StoreBase => ({
   keyboardLayout: 'ansi',
   aiKey: '',
   isDirty: false,
+  importDialogOpen: false,
   history: [],
   future: [],
   historyLimit: 50,
+  snapshots: [],
+  snapshotsLimit: 10,
+  settings: { showUndoRedo: true },
 });
 
 const makeSnapshot = (s: StoreState): StoreSnapshot => ({
@@ -103,7 +134,9 @@ export const useStore = create<StoreState>((set, get) => ({
   setKeyboardLayout: (layout) => set({ keyboardLayout: layout }),
   setAIKey: (aiKey) => set({ aiKey }),
   markDirty: () => set({ isDirty: true }),
-  markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null }),
+  markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null, lastSavedAt: Date.now() }),
+  openImportDialog: () => set({ importDialogOpen: true }),
+  closeImportDialog: () => set({ importDialogOpen: false }),
   undo: () => set((prev) => {
     if (prev.history.length === 0) return {} as StoreState;
     const last = prev.history[prev.history.length - 1];
@@ -139,6 +172,32 @@ export const useStore = create<StoreState>((set, get) => ({
       future: [],
     } as Partial<StoreState> as StoreState;
   }),
+  createSnapshot: (name: string) => set((prev) => {
+    const entry: NamedSnapshot = {
+      id: `${Date.now()}`,
+      name: name?.trim() || 'Snapshot',
+      createdAt: Date.now(),
+      config: prev.config,
+    };
+    const list = [...prev.snapshots, entry];
+    while (list.length > prev.snapshotsLimit) list.shift();
+    return { snapshots: list } as Partial<StoreState> as StoreState;
+  }),
+  revertToSnapshot: (id: string) => set((prev) => {
+    const snap = prev.snapshots.find((s) => s.id === id);
+    if (!snap) return {} as StoreState;
+    return {
+      config: snap.config,
+      isDirty: true,
+      history: [...prev.history, { config: prev.config } as StoreSnapshot],
+      future: [],
+    } as Partial<StoreState> as StoreState;
+  }),
+  deleteSnapshot: (id: string) => set((prev) => {
+    const list = prev.snapshots.filter((s) => s.id !== id);
+    return { snapshots: list } as Partial<StoreState> as StoreState;
+  }),
+  setSettings: (patch) => set((prev) => ({ settings: { ...prev.settings, ...patch } } as Partial<StoreState> as StoreState)),
 }));
 
 // Initialize store: hydrate from persisted, then fetch data/apps and config (if needed)
@@ -148,19 +207,22 @@ export async function initializeStore() {
     useStore.setState({
       config: persisted.config,
       lastSavedConfig: persisted.config,
+      lastSavedAt: persisted.lastSavedAt ?? null,
       filter: persisted.filter,
       locks: persisted.locks,
       blockedKeys: persisted.blockedKeys,
       keyboardLayout: persisted.keyboardLayout,
       aiKey: persisted.aiKey,
       isDirty: false,
+      snapshots: persisted.snapshots ?? [],
+      settings: (persisted as any).settings ?? { showUndoRedo: true },
     });
   }
   const [data, apps] = await Promise.all([getData(), getApps()]);
   useStore.setState({ data });
   if (!persisted) {
     const config = await getConfig();
-    useStore.setState({ config, lastSavedConfig: config, isDirty: false });
+    useStore.setState({ config, lastSavedConfig: config, lastSavedAt: null, isDirty: false, snapshots: [] });
   }
   useStore.setState({ apps });
 }
@@ -169,7 +231,7 @@ export async function initializeStore() {
 export const enableStorePersistence = true;
 
 // Subscribe to changes and persist locally with debounce when dirty
-let prevSnapshot: Pick<StoreState, 'config' | 'locks' | 'blockedKeys' | 'filter' | 'keyboardLayout' | 'aiKey' | 'isDirty'> = {
+let prevSnapshot: Pick<StoreState, 'config' | 'locks' | 'blockedKeys' | 'filter' | 'keyboardLayout' | 'aiKey' | 'isDirty' | 'lastSavedAt' | 'snapshots' | 'settings'> = {
   config: null,
   locks: {},
   blockedKeys: {},
@@ -177,6 +239,9 @@ let prevSnapshot: Pick<StoreState, 'config' | 'locks' | 'blockedKeys' | 'filter'
   keyboardLayout: 'ansi',
   aiKey: '',
   isDirty: false,
+  lastSavedAt: null,
+  snapshots: [],
+  settings: { showUndoRedo: true },
 };
 
 if (typeof window !== 'undefined' && enableStorePersistence) {
@@ -189,6 +254,9 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
       keyboardLayout: state.keyboardLayout,
       aiKey: state.aiKey,
       isDirty: state.isDirty,
+      lastSavedAt: state.lastSavedAt,
+      snapshots: state.snapshots,
+      settings: state.settings,
     } as typeof prevSnapshot;
 
     const changed =
@@ -198,7 +266,10 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
       snap.filter !== prevSnapshot.filter ||
       snap.keyboardLayout !== prevSnapshot.keyboardLayout ||
       snap.aiKey !== prevSnapshot.aiKey ||
-      snap.isDirty !== prevSnapshot.isDirty;
+      snap.isDirty !== prevSnapshot.isDirty ||
+      snap.lastSavedAt !== prevSnapshot.lastSavedAt ||
+      snap.snapshots !== prevSnapshot.snapshots ||
+      snap.settings !== prevSnapshot.settings;
 
     if (changed) {
       prevSnapshot = snap;
@@ -210,6 +281,9 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
           filter: snap.filter,
           keyboardLayout: snap.keyboardLayout,
           aiKey: snap.aiKey,
+          lastSavedAt: snap.lastSavedAt,
+          snapshots: snap.snapshots,
+          settings: snap.settings,
         });
         // Do not clear dirty here; server Save controls that
         savePersistedDebounced(p);

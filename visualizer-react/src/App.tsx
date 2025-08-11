@@ -4,28 +4,67 @@ import { Card, CardBody } from '@heroui/react'
 import { KeyboardGrid } from './components/KeyboardGrid/KeyboardGrid'
 import { LayerDetail } from './components/LayerDetail/LayerDetail'
 import { useStore } from './state/store'
+import { saveConfig } from './api/client'
 
 function App() {
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
+  const config = useStore((s) => s.config)
+  const isDirty = useStore((s) => s.isDirty)
+  const markSaved = useStore((s) => s.markSaved)
+  const revertToSaved = useStore((s) => s.revertToSaved)
+  const openImportDialog = useStore((s) => s.openImportDialog)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey
-      if (!isMeta) return
       const key = String(e.key || '').toLowerCase()
-      if (key === 'z') {
+      // Undo/Redo
+      if (isMeta && key === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
         else undo()
-      } else if (key === 'y') {
+        return
+      }
+      if (isMeta && key === 'y') {
         e.preventDefault()
         redo()
+        return
+      }
+      // Save
+      if (isMeta && key === 's') {
+        e.preventDefault()
+        if (config) {
+          void saveConfig(config).then(() => markSaved()).catch(() => {})
+        }
+        return
+      }
+      // Import dialog
+      if (isMeta && e.shiftKey && key === 'i') {
+        e.preventDefault()
+        openImportDialog()
+        return
+      }
+      // Cancel (revert) on Esc
+      if (key === 'escape' && isDirty) {
+        e.preventDefault()
+        revertToSaved()
+        return
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo])
+  }, [undo, redo, config, markSaved, openImportDialog, isDirty, revertToSaved])
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   return (
     <Layout>
