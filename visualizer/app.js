@@ -546,6 +546,8 @@ const ui = {
     const rcWrapId = isLayer ? 'layer-raycast-wrap' : 'cmd-raycast-wrap';
     let rcIgnoreEl = document.getElementById(rcIgnoreId);
     let rcWrapEl = document.getElementById(rcWrapId);
+    const listId = isLayer ? 'layer-app-list' : 'cmd-app-list';
+    let listEl = document.getElementById(listId);
 
     if (type === 'window') {
       // Ensure a select exists inside the same group as the text input
@@ -582,12 +584,17 @@ const ui = {
         rcWrapEl = null;
         rcIgnoreEl = null;
       }
+      // Remove app datalist if present and detach from input
+      if (listEl) {
+        if (inputEl) inputEl.removeAttribute('list');
+        listEl.remove();
+        listEl = null;
+      }
       // Show the select and set value if provided
       selectEl.classList.remove('hidden');
       if (value) selectEl.value = value;
     } else if (type === 'app') {
-      // Custom searchable combobox with inline dropdown below input
-      const MAX_SUGGESTIONS = 3; // keep list compact
+      // Use native datalist for app suggestions
       // Ensure window select removed
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
@@ -599,86 +606,55 @@ const ui = {
         rcWrapEl = null;
         rcIgnoreEl = null;
       }
-      // Create wrapper to position dropdown
-      let wrap = groupEl.querySelector('.combo-wrap');
-      if (!wrap) {
-        wrap = document.createElement('div');
-        wrap.className = 'combo-wrap';
-        groupEl.appendChild(wrap);
-        if (inputEl && inputEl.parentNode === groupEl) {
-          groupEl.removeChild(inputEl);
-          wrap.appendChild(inputEl);
-        }
+      // If input was wrapped in previous combo-wrap, unwrap it back to the group
+      const prevWrap = inputEl && inputEl.parentElement && inputEl.parentElement.classList.contains('combo-wrap') ? inputEl.parentElement : null;
+      if (prevWrap && prevWrap.parentElement === groupEl) {
+        groupEl.insertBefore(inputEl, prevWrap);
+        prevWrap.remove();
       }
-      if (!inputEl || inputEl.parentElement !== wrap) {
-        if (!inputEl) {
-          inputEl = document.createElement('input');
-          inputEl.type = 'text';
-          inputEl.id = inputId;
-          inputEl.placeholder = 'Search apps…';
-        }
-        wrap.appendChild(inputEl);
+      // Ensure a plain text input exists directly under group
+      if (!inputEl) {
+        inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.id = inputId;
       }
+      if (inputEl.parentNode !== groupEl) groupEl.appendChild(inputEl);
+      inputEl.placeholder = 'App name…';
       inputEl.classList.remove('hidden');
-      // Dropdown menu
-      let menu = wrap.querySelector('.combo-menu');
-      if (!menu) {
-        menu = document.createElement('div');
-        menu.className = 'combo-menu hidden';
-        wrap.appendChild(menu);
+      // Ensure a datalist exists and is linked
+      if (!listEl) {
+        listEl = document.createElement('datalist');
+        listEl.id = listId;
+        groupEl.appendChild(listEl);
       }
+      inputEl.setAttribute('list', listId);
+      // Populate datalist with apps
       const ensureApps = async () => {
         if (!Array.isArray(appState.apps)) {
           appState.apps = await api.fetchApps();
         }
+        // Rebuild options
+        listEl.innerHTML = '';
+        (appState.apps || []).forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.name;
+          listEl.appendChild(opt);
+        });
       };
-      const render = (q) => {
-        const query = (q || '').trim().toLowerCase();
-        const list = (appState.apps || []).filter(a => !query || a.name.toLowerCase().includes(query));
-        const top = list.slice(0, MAX_SUGGESTIONS);
-        menu.innerHTML = '';
-        top.forEach((a, idx) => {
-          const item = document.createElement('div');
-          item.className = 'combo-item';
-          item.textContent = a.name;
-          item.dataset.index = String(idx);
-          item.onmousedown = (e) => { // use mousedown to beat blur
-            e.preventDefault();
-            inputEl.value = a.name;
-            menu.classList.add('hidden');
-          };
-          menu.appendChild(item);
-        });
-        if (top.length > 0) menu.classList.remove('hidden');
-        else menu.classList.add('hidden');
-      };
-      // Attach handlers once
-      if (!inputEl._comboBound) {
-        inputEl.addEventListener('input', () => {
-          render(inputEl.value);
-        });
-        inputEl.addEventListener('focus', () => {
-          render(inputEl.value);
-        });
-        inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            menu.classList.add('hidden');
-          }
-        });
-        inputEl.addEventListener('blur', () => {
-          setTimeout(() => menu.classList.add('hidden'), 100);
-        });
-        inputEl._comboBound = true;
-      }
       ensureApps().then(() => {
         if (value) inputEl.value = value;
-        render(inputEl.value);
       });
     } else if (type === 'raycast') {
       // Remove window select if present
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
         selectEl = null;
+      }
+      // Remove app datalist if present and detach from input
+      if (listEl) {
+        if (inputEl) inputEl.removeAttribute('list');
+        listEl.remove();
+        listEl = null;
       }
       // Ensure text input
       if (!inputEl) {
@@ -735,6 +711,11 @@ const ui = {
       inputEl.classList.remove('hidden');
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
+      }
+      // Remove app datalist if present and detach from input
+      if (listEl) {
+        if (inputEl) inputEl.removeAttribute('list');
+        listEl.remove();
       }
       // Remove raycast checkbox if present
       if (rcWrapEl && rcWrapEl.parentNode === groupEl) {
