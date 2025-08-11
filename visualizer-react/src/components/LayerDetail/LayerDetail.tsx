@@ -5,7 +5,7 @@ import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
 import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip } from '@heroui/react';
 import { KeyTile } from '../KeyboardGrid/KeyTile';
-import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
+import { numberRow, topRow, homeRow, bottomRow, labelForKey } from '../../utils/keys';
 
 type CmdType = 'app' | 'window' | 'raycast' | 'shell' | 'key';
 
@@ -198,7 +198,24 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   const [ignore, setIgnore] = useState(!!initial?.ignore);
   const [innerKey, setInnerKey] = useState(initial?.innerKey || '');
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
-  const keyOptions = useMemo(() => Array.from({ length: 26 }, (_, i) => ({ id: String.fromCharCode(97 + i) })), []);
+  const disabledTypes = new Set<CmdType>(['shell', 'key']);
+  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon' };
+
+  // Build full key list and mark taken ones as disabled
+  const allKeyCodes = useMemo(() => [
+    ...numberRow,
+    ...topRow,
+    ...homeRow,
+    ...bottomRow,
+  ], []);
+  const takenInnerKeys = useMemo(() => takenKeys.map((k) => k.toLowerCase()), [takenKeys]);
+  const keyOptions = useMemo(() => {
+    return allKeyCodes.map((code) => ({
+      id: code,
+      label: labelForKey(code),
+      disabled: takenInnerKeys.includes(code.toLowerCase()),
+    }));
+  }, [allKeyCodes, takenInnerKeys]);
   return (
     <div className="space-y-4">
       <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add Command'}</h3>
@@ -212,7 +229,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
           }}
         >
           {typeOptions.map((t) => (
-            <SelectItem key={t}>
+            <SelectItem key={t} isDisabled={disabledTypes.has(t)} description={typeDescriptions[t]}>
               {t}
             </SelectItem>
           ))}
@@ -225,16 +242,20 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
         )}
         <Autocomplete
           label="Inner key"
-          placeholder={`a-z${takenKeys.length ? `, taken: ${takenKeys.join(',')}` : ''}`}
+          placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
           defaultItems={keyOptions}
-          allowsCustomValue
+          allowsCustomValue={false}
           inputValue={innerKey}
           onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
           onSelectionChange={(key) => setInnerKey(String(key || ''))}
         >
           {(item) => (
-            <AutocompleteItem key={item.id}>
-              {item.id}
+            <AutocompleteItem
+              key={item.id}
+              isDisabled={item.disabled}
+              description={item.disabled ? 'Already taken' : undefined}
+            >
+              {item.label}
             </AutocompleteItem>
           )}
         </Autocomplete>
