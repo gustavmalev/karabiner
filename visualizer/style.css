@@ -55,7 +55,7 @@ main {
   grid-template-columns: 1fr;
   gap: 24px;
   align-items: start;
-  max-width: 1400px;
+  max-width: 1800px; /* widen to accommodate full keyboard */
   margin: 0 auto;
 }
 
@@ -132,7 +132,9 @@ main {
 
 .row {
   display: grid;
-  gap: 12px;
+  grid-template-columns: 70px 1fr; /* slimmer label + key area */
+  gap: 12px 16px;
+  align-items: start;
 }
 
 .key {
@@ -143,6 +145,8 @@ main {
   padding: 0;
   height: 48px;
   min-width: 48px;
+  max-width: 48px; /* keep keys uniform */
+  flex: 0 0 48px; /* fixed key width inside flex rows */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -252,10 +256,11 @@ main {
 
 .row-wrap {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 12px 16px;
+  grid-auto-flow: column; /* lay out keys in a single horizontal row */
+  grid-auto-columns: 48px; /* fixed key width columns */
+  gap: 8px;
   align-items: start;
-  margin: 16px 0;
+  margin: 4px 0 16px;
 }
 
 .row-label {
@@ -268,9 +273,24 @@ main {
   font-weight: 500;
 }
 
-#base-grid .row {
-  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
-}
+/* Base grid rows use the shared .row layout (label + keys columns) */
+
+/* Stagger rows to mimic physical keyboard layout */
+#base-grid.keyboard-ansi .row--top .row-wrap { margin-left: 24px; }
+#base-grid.keyboard-ansi .row--home .row-wrap { margin-left: 36px; }
+#base-grid.keyboard-ansi .row--bottom .row-wrap { margin-left: 56px; }
+
+/* ISO typically has an extra key on the top/home rows; adjust offsets slightly */
+#base-grid.keyboard-iso .row--top .row-wrap { margin-left: 32px; }
+#base-grid.keyboard-iso .row--home .row-wrap { margin-left: 48px; }
+#base-grid.keyboard-iso .row--bottom .row-wrap { margin-left: 64px; }
+
+/* Make the toggles row wrap nicely */
+.keyboard-toggle { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+
+/* Ensure keyboard grids expand to fit without scrolling */
+.key-grid, .layer-commands .keyboard-grid { overflow-x: visible; }
+.layer-commands .keyboard-grid { width: max-content; }
 
 #layer-grid .row {
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
@@ -798,7 +818,7 @@ main {
 /* Responsive design */
 @media (min-width: 900px) {
   main {
-    grid-template-columns: 1.25fr 0.75fr;
+    grid-template-columns: 0.9fr 1.1fr; /* make Configuration panel wider */
   }
   
   header {
@@ -864,19 +884,9 @@ main {
 .key.available { --state-dot: var(--success); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
 .key.thirdparty { --state-dot: var(--amber); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
 
-/* Restore centered container max-width */
-main { max-width: 1400px !important; margin: 0 auto !important; }
+/* Restore centered container max-width (updated wider) */
+main { max-width: 1800px !important; margin: 0 auto !important; }
 
-/* Restore row label visibility and two-column structure */
-.row-label { display: block !important; }
-.row-wrap { grid-template-columns: 120px 1fr !important; }
-
-/* Restore status dot visibility */
+/* Restore status dot visibility and selection styling */
 .key::after { display: block !important; }
-
-/* Keep responsive tweaks but ensure subtle theme */
 .key.selected { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
-
-/* Left-aligned, responsive layout */
-.row-label { display: none !important; }
-.row-wrap { grid-template-columns: 1fr !important; }

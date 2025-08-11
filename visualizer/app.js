@@ -154,6 +154,7 @@ function parseTypeTextFrom(command) {
 const storage = {
   LOCKS_KEY: 'kv.baseLocks.v1',
   FILTER_KEY: 'kv.pref.baseFilter.v1',
+  KEYBOARD_KEY: 'kv.pref.keyboardLayout.v1',
   
   loadBaseLocks() {
     try {
@@ -175,6 +176,16 @@ const storage = {
   saveFilter(filter) {
     try {
       localStorage.setItem(this.FILTER_KEY, filter);
+    } catch {}
+  },
+  loadKeyboardLayout() {
+    try {
+      return localStorage.getItem(this.KEYBOARD_KEY) || 'ANSI';
+    } catch { return 'ANSI'; }
+  },
+  saveKeyboardLayout(layout) {
+    try {
+      localStorage.setItem(this.KEYBOARD_KEY, layout);
     } catch {}
   }
 };
@@ -256,6 +267,7 @@ const renderer = {
     if (!grid) return;
     
     const filter = storage.loadFilter();
+    const kbLayout = storage.loadKeyboardLayout(); // 'ANSI' | 'ISO'
     
     // Create sets from the /api/data response
     const sublayerByKey = new Set(appState.data?.base?.sublayerKeys || []);
@@ -281,9 +293,9 @@ const renderer = {
       }
     });
     
-    const renderRow = (keys, label) => {
+    const renderRow = (keys, label, rowClass) => {
       const row = document.createElement('div');
-      row.className = 'row';
+      row.className = `row ${rowClass || ''}`.trim();
       
       const rowLabel = document.createElement('div');
       rowLabel.className = 'row-label';
@@ -336,10 +348,13 @@ const renderer = {
     };
     
     grid.innerHTML = '';
-    grid.appendChild(renderRow(numberRow, 'Numbers'));
-    grid.appendChild(renderRow(topRow, 'Top'));
-    grid.appendChild(renderRow(homeRow, 'Home'));
-    grid.appendChild(renderRow(bottomRow, 'Bottom'));
+    // Apply keyboard layout class to container
+    grid.classList.toggle('keyboard-ansi', kbLayout === 'ANSI');
+    grid.classList.toggle('keyboard-iso', kbLayout === 'ISO');
+    grid.appendChild(renderRow(numberRow, 'Numbers', 'row--numbers'));
+    grid.appendChild(renderRow(topRow, 'Top', 'row--top'));
+    grid.appendChild(renderRow(homeRow, 'Home', 'row--home'));
+    grid.appendChild(renderRow(bottomRow, 'Bottom', 'row--bottom'));
   },
 
   renderLayerDetail(layerKey) {
@@ -378,29 +393,47 @@ const renderer = {
   },
 
   renderSubLayerCommands(layerKey, commands) {
-    const commandEntries = Object.entries(commands || {});
-    
+    const commandMap = commands || {};
+    const kbLayout = storage.loadKeyboardLayout(); // 'ANSI' | 'ISO'
+    const rows = [
+      { label: 'Numbers', keys: numberRow, cls: 'row--numbers' },
+      { label: 'Top', keys: topRow, cls: 'row--top' },
+      { label: 'Home', keys: homeRow, cls: 'row--home' },
+      { label: 'Bottom', keys: bottomRow, cls: 'row--bottom' }
+    ];
+
+    const renderRow = ({ label, keys, cls }) => {
+      const tiles = keys.map(code => {
+        const cmd = commandMap[code];
+        const has = !!cmd;
+        const desc = has ? (cmd.description || this.getCommandDescription(cmd)) : 'Add';
+        const classes = ['key', has ? 'custom' : 'available'].join(' ');
+        const onClick = has
+          ? `ui.editCommand('${layerKey}', '${code}')`
+          : `ui.addCommand('${layerKey}', '${code}')`;
+        return `
+          <div class="key-tile" onclick="${onClick}">
+            <div class="${classes}" title="${utils.escapeHtml(desc)}">${utils.formatKeyLabel(code)}</div>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="row ${cls}">
+          <div class="row-label">${label}</div>
+          <div class="row-wrap">${tiles}</div>
+        </div>
+      `;
+    };
+
     return `
       <div class="layer-commands">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h4>Commands (${commandEntries.length})</h4>
-          <button class="btn-primary btn-small" onclick="ui.addCommand('${layerKey}')">Add Command</button>
+          <h4>Commands (${Object.keys(commandMap).length})</h4>
         </div>
-        ${commandEntries.length === 0 ? 
-          '<p class="empty">No commands defined. Click "Add Command" to get started.</p>' :
-          commandEntries.map(([key, cmd]) => `
-            <div class="command-item" onclick="ui.editCommand('${layerKey}', '${key}')">
-              <div class="command-info">
-                <div class="command-key">${utils.formatKeyLabel(key)}</div>
-                <div class="command-desc">${utils.escapeHtml(cmd.description || this.getCommandDescription(cmd))}</div>
-              </div>
-              <div class="command-actions">
-                <button class="btn-secondary btn-small" onclick="event.stopPropagation(); ui.editCommand('${layerKey}', '${key}')">Edit</button>
-                <button class="btn-danger btn-small" onclick="event.stopPropagation(); ui.deleteCommand('${layerKey}', '${key}')">Delete</button>
-              </div>
-            </div>
-          `).join('')
-        }
+        <div class="keyboard-grid ${kbLayout === 'ISO' ? 'keyboard-iso' : 'keyboard-ansi'}">
+          ${rows.map(renderRow).join('')}
+        </div>
+        ${Object.keys(commandMap).length === 0 ? '<p class="empty" style="margin-top: 0.75rem;">Tip: Click any key tile to add a command.</p>' : ''}
       </div>
     `;
   },
@@ -506,13 +539,28 @@ const ui = {
       container.appendChild(saveBtn);
     }
 
-    // Add Layer button (always shown)
-    const addBtn = document.createElement('button');
-    addBtn.id = 'add-layer';
-    addBtn.className = 'btn-secondary';
-    addBtn.textContent = 'Add Layer';
-    addBtn.addEventListener('click', () => this.addLayer());
-    container.appendChild(addBtn);
+    // Removed: Add Layer button. Adding happens by clicking keys.
+
+    // Keyboard layout toggle (ANSI/ISO)
+    const kbWrap = document.createElement('div');
+    kbWrap.className = 'keyboard-toggle';
+    const current = storage.loadKeyboardLayout();
+    const makeBtn = (label) => {
+      const b = document.createElement('button');
+      b.className = 'filter-item' + (current === label ? ' active' : '');
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        storage.saveKeyboardLayout(label);
+        // refresh active state
+        this.renderActions();
+        // re-render grid with new layout class
+        renderer.renderBaseGrid();
+      });
+      return b;
+    };
+    kbWrap.appendChild(makeBtn('ANSI'));
+    kbWrap.appendChild(makeBtn('ISO'));
+    container.appendChild(kbWrap);
   },
 
   // Ensure command UI is only visible for 'Single Command'
@@ -850,7 +898,7 @@ const ui = {
     ui.showToast('Layer deleted successfully');
   },
 
-  addCommand(layerKey) {
+  addCommand(layerKey, preselectedKey = null) {
     const modal = document.getElementById('command-modal');
     const form = document.getElementById('command-form');
     
@@ -869,11 +917,18 @@ const ui = {
       utils.markDirty();
     }
     
-    // Populate key dropdown with unused keys
+    // Populate key dropdown: if preselected, lock to that; else show unused keys
     const usedKeys = appState.config.layers[layerKey]?.commands ? Object.keys(appState.config.layers[layerKey].commands) : [];
-    renderer.populateKeySelect('command-key', usedKeys);
     const keySelect = document.getElementById('command-key');
-    if (keySelect) keySelect.disabled = false;
+    if (preselectedKey) {
+      // Force single option for the chosen key
+      keySelect.innerHTML = `<option value="${preselectedKey}">${utils.formatKeyLabel(preselectedKey)} (${preselectedKey})</option>`;
+      keySelect.value = preselectedKey;
+      keySelect.disabled = true;
+    } else {
+      renderer.populateKeySelect('command-key', usedKeys);
+      if (keySelect) keySelect.disabled = false;
+    }
     // Set defaults for new command
     const typeSel = document.getElementById('cmd-type');
     const textInp = document.getElementById('cmd-command-text');
