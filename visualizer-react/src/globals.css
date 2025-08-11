@@ -1,0 +1,6 @@
+:root {
+  --bg: 13 18 28;
+  --panel: 255 255 255 / 0.05;
+}
+
+body { background-color: rgb(var(--bg)); }
