@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Navbar, NavbarBrand, NavbarContent } from '@heroui/react';
+import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
 import { useAppState } from '../state/appState';
 import { saveConfig } from '../api/client';
 
@@ -24,9 +24,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-base font-semibold">Visualizer</h1>
         </NavbarBrand>
         <NavbarContent justify="end">
-          <Button color="primary" isDisabled={!state.isDirty} onPress={onSave}>
-            Save
-          </Button>
+          <Tooltip content="Save changes" placement="bottom">
+            <div className="inline-block">
+              <Button variant="solid" color="primary" isDisabled={!state.isDirty} onPress={onSave}>
+                Save
+              </Button>
+            </div>
+          </Tooltip>
         </NavbarContent>
       </Navbar>
       <main className="mx-auto max-w-screen-2xl p-4 md:p-6">{children}</main>

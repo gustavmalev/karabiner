@@ -1,5 +1,5 @@
 import { labelForKey } from '../../utils/keys';
-import { Button, Kbd } from '@heroui/react';
+import { Button, Tooltip } from '@heroui/react';
 
 export function KeyTile({
   code,
@@ -15,36 +15,41 @@ export function KeyTile({
   const color: 'primary' | 'success' | 'warning' | 'default' =
     state === 'sublayer' ? 'primary' : state === 'custom' ? 'success' : state === 'thirdparty' ? 'warning' : 'default';
   const disabled = state === 'locked';
+  const textClass = color === 'default' ? 'text-black' : 'text-white';
+  const tooltip = `${labelForKey(code)} — ${state}`;
   return (
     <div className="relative inline-flex items-center">
-      <Button
-        size="sm"
-        variant={state === 'available' ? 'bordered' : 'solid'}
-        color={color}
-        isDisabled={disabled}
-        onPress={onClick}
-        title={code}
-        className="font-medium"
-        style={{
-          // Prefer CSS var set by parent; fallback to previous clamp sizes
-          width: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
-          minWidth: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
-          height: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
-          minHeight: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
-        }}
-      >
-        <Kbd style={{ fontSize: 'calc(var(--key-size, 3rem) * var(--key-font, 0.35))' }}>{labelForKey(code)}</Kbd>
-      </Button>
-      {onToggleLock && (
+      <Tooltip content={tooltip} placement="top">
         <Button
           size="sm"
-          variant="light"
-          onPress={onToggleLock}
-          className="ml-1"
-          title="Toggle lock"
+          variant="solid"
+          color={color}
+          isDisabled={disabled}
+          onPress={onClick}
+          className={`font-medium ${textClass}`}
+          style={{
+            // Prefer CSS var set by parent; fallback to previous clamp sizes
+            width: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
+            minWidth: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
+            height: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
+            minHeight: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
+          }}
         >
-          🔒
+          <span style={{ fontSize: 'calc(var(--key-size, 3rem) * var(--key-font, 0.35))' }}>{labelForKey(code)}</span>
         </Button>
+      </Tooltip>
+      {onToggleLock && (
+        <Tooltip content="Toggle lock" placement="top">
+          <Button
+            size="sm"
+            variant="solid"
+            color="default"
+            onPress={onToggleLock}
+            className="ml-1 text-black"
+          >
+            🔒
+          </Button>
+        </Tooltip>
       )}
     </div>
   );

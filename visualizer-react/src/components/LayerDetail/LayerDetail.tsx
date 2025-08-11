@@ -3,7 +3,7 @@ import { useAppState } from '../../state/appState';
 import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
-import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody } from '@heroui/react';
+import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip } from '@heroui/react';
 import { KeyTile } from '../KeyboardGrid/KeyTile';
 import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
 
@@ -97,14 +97,20 @@ export function LayerDetail() {
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Layer Detail</h2>
           {key && !layer && (
-            <Button size="sm" variant="flat" onPress={onAddLayer}>
-              Add Layer
-            </Button>
+            <Tooltip content="Create a sublayer for this key" placement="left">
+              <Button size="sm" variant="solid" color="primary" onPress={onAddLayer}>
+                Add Layer
+              </Button>
+            </Tooltip>
           )}
           {key && layer && (
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="flat" onPress={() => setShowCmdModal({ mode: 'add' })}>Add Command</Button>
-              <Button size="sm" variant="flat" color="danger" onPress={onDeleteLayer}>Delete Layer</Button>
+              <Tooltip content="Add a new inner command" placement="left">
+                <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add Command</Button>
+              </Tooltip>
+              <Tooltip content="Delete this sublayer" placement="left">
+                <Button size="sm" variant="solid" color="danger" onPress={onDeleteLayer}>Delete Layer</Button>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -234,8 +240,12 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
         </Autocomplete>
       </div>
       <div className="mt-2 flex justify-end gap-2">
-        <Button variant="flat" onPress={onCancel}>Cancel</Button>
-        <Button color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
+        <Tooltip content="Close without saving" placement="top">
+          <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
+        </Tooltip>
+        <Tooltip content="Save command" placement="top">
+          <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
+        </Tooltip>
       </div>
     </div>
   );
