@@ -222,6 +222,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
       disabled: takenInnerKeys.includes(code.toLowerCase()),
     }));
   }, [allKeyCodes, takenInnerKeys]);
+  const appItems = useMemo(() => state.apps.map(a => ({ id: a.name, label: a.name })), [state.apps]);
 
   // Simple mnemonic-based suggestion per philosophy
   function suggestInnerKey(): { key: string | null; reason: string } {
@@ -306,7 +307,25 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
             </SelectItem>
           ))}
         </Select>
-        <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+        {type === 'app' ? (
+          <Autocomplete
+            label="App"
+            placeholder="Search installed apps"
+            defaultItems={appItems}
+            allowsCustomValue
+            inputValue={text}
+            onInputChange={(val) => setText((val || '').trimStart())}
+            onSelectionChange={(key) => setText(String(key || ''))}
+          >
+            {(item) => (
+              <AutocompleteItem key={item.id}>
+                {item.label}
+              </AutocompleteItem>
+            )}
+          </Autocomplete>
+        ) : (
+          <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+        )}
         {!hasAIKey && isAIMode && (
           <Input
             label="Gemini API key"
