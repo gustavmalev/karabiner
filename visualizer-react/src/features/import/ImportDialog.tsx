@@ -83,7 +83,7 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
               <li><b>Commands removed:</b> {summary.commandsRemoved}</li>
               <li><b>Commands changed:</b> {summary.commandsChanged}</li>
             </ul>
-            <div className="text-default-500">Confirm to replace the current layout with the imported one. You can Undo later (<Kbd>Cmd</Kbd>+<Kbd>Z</Kbd> once history is implemented).</div>
+            <div className="text-default-500">Confirm to replace the current layout with the imported one. You can undo later (<Kbd>Cmd</Kbd>+<Kbd>Z</Kbd>).</div>
           </div>
         )}
         <div className="mt-2 flex justify-end gap-2">

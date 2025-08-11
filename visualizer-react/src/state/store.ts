@@ -12,6 +12,7 @@ export type StoreState = {
   // data
   data: Data | null;
   config: Config | null;
+  lastSavedConfig: Config | null;
   apps: AppInfo[];
   // ui
   currentLayerKey: KeyCode | null;
@@ -41,11 +42,13 @@ export type StoreState = {
   markSaved: () => void;
   undo: () => void;
   redo: () => void;
+  revertToSaved: () => void;
 };
 
 type StoreBase = {
   data: Data | null;
   config: Config | null;
+  lastSavedConfig: Config | null;
   apps: AppInfo[];
   currentLayerKey: KeyCode | null;
   filter: Filter;
@@ -62,6 +65,7 @@ type StoreBase = {
 const initial = (): StoreBase => ({
   data: null,
   config: null,
+  lastSavedConfig: null,
   apps: [],
   currentLayerKey: null,
   filter: 'all',
@@ -79,7 +83,7 @@ const makeSnapshot = (s: StoreState): StoreSnapshot => ({
   config: s.config,
 });
 
-export const useStore = create<StoreState>((set, _get) => ({
+export const useStore = create<StoreState>((set, get) => ({
   ...initial(),
   setData: (data) => set({ data }),
   setConfig: (config) => set((prev) => {
@@ -99,7 +103,7 @@ export const useStore = create<StoreState>((set, _get) => ({
   setKeyboardLayout: (layout) => set({ keyboardLayout: layout }),
   setAIKey: (aiKey) => set({ aiKey }),
   markDirty: () => set({ isDirty: true }),
-  markSaved: () => set({ isDirty: false }),
+  markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null }),
   undo: () => set((prev) => {
     if (prev.history.length === 0) return {} as StoreState;
     const last = prev.history[prev.history.length - 1];
@@ -125,6 +129,16 @@ export const useStore = create<StoreState>((set, _get) => ({
       isDirty: true,
     } as Partial<StoreState> as StoreState;
   }),
+  revertToSaved: () => set((prev) => {
+    const saved = (prev as StoreState).lastSavedConfig;
+    if (!saved) return {} as StoreState;
+    return {
+      config: saved,
+      isDirty: false,
+      history: [],
+      future: [],
+    } as Partial<StoreState> as StoreState;
+  }),
 }));
 
 // Initialize store: hydrate from persisted, then fetch data/apps and config (if needed)
@@ -133,6 +147,7 @@ export async function initializeStore() {
   if (persisted) {
     useStore.setState({
       config: persisted.config,
+      lastSavedConfig: persisted.config,
       filter: persisted.filter,
       locks: persisted.locks,
       blockedKeys: persisted.blockedKeys,
@@ -145,7 +160,7 @@ export async function initializeStore() {
   useStore.setState({ data });
   if (!persisted) {
     const config = await getConfig();
-    useStore.setState({ config, isDirty: false });
+    useStore.setState({ config, lastSavedConfig: config, isDirty: false });
   }
   useStore.setState({ apps });
 }

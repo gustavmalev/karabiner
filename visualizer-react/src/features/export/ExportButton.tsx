@@ -8,9 +8,10 @@ export function ExportButton() {
   const filter = useStore((s) => s.filter);
   const keyboardLayout = useStore((s) => s.keyboardLayout);
   const aiKey = useStore((s) => s.aiKey);
+  const blockedKeys = useStore((s) => s.blockedKeys);
   const onExport = () => {
     if (!config) return;
-    const p = buildPersisted({ config, locks, filter, keyboardLayout, aiKey });
+    const p = buildPersisted({ config, locks, filter, keyboardLayout, aiKey, blockedKeys });
     exportJson(p);
   };
   return (
