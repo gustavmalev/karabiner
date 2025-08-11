@@ -308,6 +308,15 @@ main {
 #base-grid.keyboard-iso .row--home .row-wrap { margin-left: 48px; }
 #base-grid.keyboard-iso .row--bottom .row-wrap { margin-left: 64px; }
 
+/* Mirror ANSI/ISO offsets inside layer-commands keyboard grid */
+.layer-commands .keyboard-ansi .row--top .row-wrap { margin-left: 24px; }
+.layer-commands .keyboard-ansi .row--home .row-wrap { margin-left: 36px; }
+.layer-commands .keyboard-ansi .row--bottom .row-wrap { margin-left: 56px; }
+
+.layer-commands .keyboard-iso .row--top .row-wrap { margin-left: 32px; }
+.layer-commands .keyboard-iso .row--home .row-wrap { margin-left: 48px; }
+.layer-commands .keyboard-iso .row--bottom .row-wrap { margin-left: 64px; }
+
 /* Make the toggles row wrap nicely */
 .keyboard-toggle { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 

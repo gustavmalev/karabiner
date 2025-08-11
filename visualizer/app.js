@@ -401,6 +401,16 @@ const renderer = {
     }
 
     const isSubLayer = layerConfig ? (layerConfig.type === 'sublayer') : true; // virtual sublayer
+
+    // Apply keyboard layout class to the detail container and its parent section panel
+    const kbLayout = storage.loadKeyboardLayout(); // 'ANSI' | 'ISO'
+    detail.classList.toggle('keyboard-ansi', kbLayout === 'ANSI');
+    detail.classList.toggle('keyboard-iso', kbLayout === 'ISO');
+    const panel = detail.closest('section.panel');
+    if (panel) {
+      panel.classList.toggle('keyboard-ansi', kbLayout === 'ANSI');
+      panel.classList.toggle('keyboard-iso', kbLayout === 'ISO');
+    }
     
     detail.innerHTML = `
       <div class="detail-content">
@@ -411,10 +421,7 @@ const renderer = {
             <button class="btn-danger btn-small" onclick="ui.deleteLayer('${layerKey}')">Delete Layer</button>
           </div>
         </div>
-        <div class="layer-info">
-          <p><strong>Type:</strong> ${isSubLayer ? 'Sublayer' : 'Single Command'}</p>
-          ${layerConfig?.description ? `<p><strong>Description:</strong> ${utils.escapeHtml(layerConfig.description)}</p>` : ''}
-        </div>
+        <div class="layer-info"></div>
         ${isSubLayer 
           ? this.renderSubLayerCommands(layerKey, layerConfig?.commands || {}) 
           : this.renderSingleCommand(layerConfig.command)}
@@ -457,9 +464,6 @@ const renderer = {
 
     return `
       <div class="layer-commands">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <h4>Commands (${Object.keys(commandMap).length})</h4>
-        </div>
         <div class="keyboard-grid ${kbLayout === 'ISO' ? 'keyboard-iso' : 'keyboard-ansi'}">
           ${rows.map(renderRow).join('')}
         </div>
