@@ -8,12 +8,16 @@
     "@types/node": "^18.7.19",
     "nodemon": "^2.0.20",
     "prettier": "^2.7.1",
-    "tsm": "^2.2.2"
+    "tsm": "^2.2.2",
+    "concurrently": "^9.0.0"
   },
   "scripts": {
     "build": "tsm rules.ts",
     "watch": "nodemon --exec yarn build -e ts",
-    "start": "node visualizer/server/index.mjs",
-    "visualizer": "node visualizer/server/index.mjs"
+    "start": "node visualizer-react/server/index.mjs",
+    "dev": "concurrently -k -n server,client -c cyan,magenta \"npm --prefix visualizer-react run server\" \"npm --prefix visualizer-react run dev\"",
+    "server": "npm --prefix visualizer-react run server",
+    "client": "npm --prefix visualizer-react run dev",
+    "visualizer": "node visualizer-react/server/index.mjs"
   }
 }

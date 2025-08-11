@@ -113,16 +113,6 @@ const server = createServer(async (req, res) => {
       }
       return;
     }
-
-    if (url.pathname === '/api/screentime' && req.method === 'GET') {
-      try {
-        const top = await getScreenTimeTopApps();
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(top));
-      } catch (e) {
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ apps: [], note: 'Unavailable' }));
-      }
-      return;
-    }
     }
 
     if (url.pathname === '/api/data') {
@@ -174,7 +164,7 @@ const server = createServer(async (req, res) => {
             }
 
             // Build karabiner.json by running the project build script
-            exec('yarn build', { cwd: PROJECT_ROOT }, (err, stdout, stderr) => {
+            exec('npm run build', { cwd: PROJECT_ROOT }, (err, stdout, stderr) => {
               if (err) {
                 console.error('[build] Error:', err.message);
                 console.error('[build] Stderr:', stderr);

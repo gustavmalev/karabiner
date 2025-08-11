@@ -6,7 +6,7 @@ import os from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// The client assets live one directory up at `visualizer/`
+// The client assets live one directory up at `visualizer-react/`
 const VISUALIZER_DIR = path.resolve(__dirname, '..');
 
 function resolveKarabinerJson() {
@@ -22,7 +22,7 @@ function resolveKarabinerJson() {
 }
 
 const KARABINER_JSON = resolveKarabinerJson();
-const STATIC_DIR = VISUALIZER_DIR; // serve the existing visualizer/ directory as the web root
+const STATIC_DIR = VISUALIZER_DIR; // serve the visualizer-react/ directory as the web root (not used in Vite dev)
 const PORT = Number(process.env.PORT || 5178);
 
 // Always-resolved path to the user's Karabiner config file (for applying changes)
@@ -33,7 +33,7 @@ function resolveRulesTs() {
   if (process.env.RULES_TS) {
     return path.resolve(process.env.RULES_TS);
   }
-  // Default to rules.ts in the parent directory
+  // Default to rules.ts in the parent directory (repo root)
   const rulesPath = path.join(path.resolve(VISUALIZER_DIR, '..'), 'rules.ts');
   return rulesPath;
 }
@@ -184,7 +184,6 @@ function generateCommandCode(command) {
   return '{ to: [{ key_code: "void" }] }';
 }
 
-
 // Generate rules.ts content from configuration
 function generateRulesTs(config) {
   const { layers } = config;
@@ -272,7 +271,6 @@ fs.writeFileSync(
 `;
   return content;
 }
-
 
 export { 
   __dirname as SERVER_DIR, 
