@@ -695,6 +695,43 @@ main {
   margin: 0;
 }
 
+/* Combobox (Apps) */
+.combo-wrap {
+  position: relative;
+}
+
+.combo-wrap input[type="text"] {
+  width: 100%;
+}
+
+.combo-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  z-index: 500;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.combo-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.combo-item:hover,
+.combo-item[aria-selected="true"] {
+  background: var(--chip-bg);
+}
+
 /* Enhanced Detail Panel */
 .detail-content {
   padding: 1.5rem;

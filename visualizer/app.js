@@ -7,7 +7,8 @@ const appState = {
   currentLayerMaps: { descByKey: new Map(), detailByKey: new Map() },
   data: null,
   config: null, // Raw configuration data
-  isDirty: false // Track if changes have been made
+  isDirty: false, // Track if changes have been made
+  apps: null // Cached list of installed applications for combobox
 };
 
 // Key mapping and layout configuration
@@ -197,6 +198,23 @@ const api = {
     const res = await fetch('/api/config');
     if (!res.ok) throw new Error('Failed to load configuration');
     return await res.json();
+  },
+
+  async fetchApps() {
+    try {
+      const res = await fetch('/api/apps');
+      if (!res.ok) throw new Error('Failed to load apps');
+      const apps = await res.json();
+      // Expecting [{ name, bundleId?, path? }]
+      return (Array.isArray(apps) ? apps : []).map(a => ({
+        name: a.name || String(a || ''),
+        bundleId: a.bundleId || '',
+        path: a.path || ''
+      }));
+    } catch (e) {
+      console.warn('fetchApps failed; falling back to manual entry only', e);
+      return [];
+    }
   },
 
   async saveConfig(config) {
@@ -545,23 +563,102 @@ const ui = {
       // Show the select and set value if provided
       selectEl.classList.remove('hidden');
       if (value) selectEl.value = value;
+    } else if (type === 'app') {
+      // Custom searchable combobox with inline dropdown below input
+      const MAX_SUGGESTIONS = 3; // keep list compact
+      // Ensure window select removed
+      if (selectEl && selectEl.parentNode === groupEl) {
+        selectEl.remove();
+        selectEl = null;
+      }
+      // Create wrapper to position dropdown
+      let wrap = groupEl.querySelector('.combo-wrap');
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.className = 'combo-wrap';
+        groupEl.appendChild(wrap);
+        if (inputEl && inputEl.parentNode === groupEl) {
+          groupEl.removeChild(inputEl);
+          wrap.appendChild(inputEl);
+        }
+      }
+      if (!inputEl || inputEl.parentElement !== wrap) {
+        if (!inputEl) {
+          inputEl = document.createElement('input');
+          inputEl.type = 'text';
+          inputEl.id = inputId;
+          inputEl.placeholder = 'Search apps…';
+        }
+        wrap.appendChild(inputEl);
+      }
+      inputEl.classList.remove('hidden');
+      // Dropdown menu
+      let menu = wrap.querySelector('.combo-menu');
+      if (!menu) {
+        menu = document.createElement('div');
+        menu.className = 'combo-menu hidden';
+        wrap.appendChild(menu);
+      }
+      const ensureApps = async () => {
+        if (!Array.isArray(appState.apps)) {
+          appState.apps = await api.fetchApps();
+        }
+      };
+      const render = (q) => {
+        const query = (q || '').trim().toLowerCase();
+        const list = (appState.apps || []).filter(a => !query || a.name.toLowerCase().includes(query));
+        const top = list.slice(0, MAX_SUGGESTIONS);
+        menu.innerHTML = '';
+        top.forEach((a, idx) => {
+          const item = document.createElement('div');
+          item.className = 'combo-item';
+          item.textContent = a.name;
+          item.dataset.index = String(idx);
+          item.onmousedown = (e) => { // use mousedown to beat blur
+            e.preventDefault();
+            inputEl.value = a.name;
+            menu.classList.add('hidden');
+          };
+          menu.appendChild(item);
+        });
+        if (top.length > 0) menu.classList.remove('hidden');
+        else menu.classList.add('hidden');
+      };
+      // Attach handlers once
+      if (!inputEl._comboBound) {
+        inputEl.addEventListener('input', () => {
+          render(inputEl.value);
+        });
+        inputEl.addEventListener('focus', () => {
+          render(inputEl.value);
+        });
+        inputEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            menu.classList.add('hidden');
+          }
+        });
+        inputEl.addEventListener('blur', () => {
+          setTimeout(() => menu.classList.add('hidden'), 100);
+        });
+        inputEl._comboBound = true;
+      }
+      ensureApps().then(() => {
+        if (value) inputEl.value = value;
+        render(inputEl.value);
+      });
     } else {
-      // Switching away from 'window': ensure a text input exists
       if (!inputEl) {
         inputEl = document.createElement('input');
         inputEl.type = 'text';
         inputEl.id = inputId;
         inputEl.placeholder = 'e.g., Comet or top-left or echo hi';
-        // Place after label (at end of group). If select exists, insert before it to keep order
         if (selectEl && selectEl.parentNode === groupEl) {
           groupEl.insertBefore(inputEl, selectEl);
         } else {
           groupEl.appendChild(inputEl);
         }
       }
-      // Ensure input is visible
       inputEl.classList.remove('hidden');
-      // Remove the select if present to keep DOM clean
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
       }

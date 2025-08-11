@@ -1,12 +1,48 @@
 import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { exec } from 'child_process';
 import { PORT, KARABINER_JSON, USER_KARABINER_JSON, RULES_TS, VISUALIZER_DIR, readKarabinerJson, parseRulesConfig, generateRulesTs, writeRulesTs } from './config.mjs';
 import { analyze } from './analyze.mjs';
 import { serveStatic } from './static.mjs';
 
 const PROJECT_ROOT = path.resolve(VISUALIZER_DIR, '..');
+
+// Utility: list installed apps by scanning standard folders
+async function listInstalledApps() {
+  const dirs = [
+    '/Applications',
+    '/System/Applications',
+    path.join(os.homedir(), 'Applications')
+  ];
+
+  const seen = new Set();
+  const apps = [];
+
+  for (const dir of dirs) {
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const ent of entries) {
+        if (ent.isDirectory() && ent.name.endsWith('.app')) {
+          const fullPath = path.join(dir, ent.name);
+          // Derive a human name from folder name (strip .app)
+          const base = ent.name.replace(/\.app$/i, '');
+          if (!seen.has(base)) {
+            seen.add(base);
+            apps.push({ name: base, path: fullPath });
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore missing dirs
+    }
+  }
+
+  // Sort by name client expects sorted
+  apps.sort((a, b) => a.name.localeCompare(b.name));
+  return apps;
+}
 
 const server = createServer(async (req, res) => {
   try {
@@ -22,6 +58,12 @@ const server = createServer(async (req, res) => {
         res.writeHead(200).end();
         return;
       }
+
+    if (url.pathname === '/api/apps' && req.method === 'GET') {
+      const apps = await listInstalledApps();
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(apps));
+      return;
+    }
     }
 
     if (url.pathname === '/api/data') {
