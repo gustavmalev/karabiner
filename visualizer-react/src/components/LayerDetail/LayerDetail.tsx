@@ -36,7 +36,7 @@ export function LayerDetail() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const gap = Math.min(16, Math.max(10, Math.round(containerWidth / 120)));
+  const gap = Math.min(14, Math.max(8, Math.round(containerWidth / 140)));
   const rows = useMemo(() => [numberRow, topRow, homeRow, bottomRow] as string[][], []);
   const keySize = useMemo(() => {
     if (!containerWidth) return 34;
@@ -180,7 +180,13 @@ export function LayerDetail() {
         <div
           ref={containerRef}
           className="space-y-3"
-          style={{ ['--key-size']: `${keySize}px`, ['--key-gap']: `${gap}px` } as CSSProperties}
+          style={{
+            ['--key-size']: `${keySize}px`,
+            ['--key-gap']: `${gap}px`,
+            // Slightly larger label font and a bit taller key aspect for a cleaner look
+            ['--key-font']: '0.38',
+            ['--key-h']: '0.9',
+          } as CSSProperties}
         >
           <div className="text-xs text-default-500">Click a key to add/edit an inner command for this sublayer.</div>
           {rows.map((row, idx) => (

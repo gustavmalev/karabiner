@@ -40,7 +40,7 @@ export function KeyTile({
           color={color}
           isDisabled={disabled}
           onPress={onClick}
-          className={`font-medium ${textClass}`}
+          className={`font-medium ${textClass} rounded-medium shadow-sm hover:shadow-md transition-shadow transition-transform will-change-transform hover:-translate-y-[1px]`}
           style={{
             // Prefer CSS var set by parent; fallback to previous clamp sizes
             width: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
@@ -53,9 +53,10 @@ export function KeyTile({
         </Button>
       </Tooltip>
       {state === 'locked' && (
-        <span className="absolute -top-1 -right-1 rounded bg-danger text-white text-[10px] px-1 py-0.5 leading-none">
-          Layer
-        </span>
+        <span
+          className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-background"
+          aria-hidden="true"
+        />
       )}
       {onToggleLock && (
         <Tooltip content="Toggle lock" placement="top">
