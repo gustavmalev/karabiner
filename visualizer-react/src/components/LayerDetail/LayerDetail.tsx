@@ -4,7 +4,7 @@ import { selectCurrentLayer } from '../../state/selectors';
 import { buildCommandFrom, parseTypeTextFrom, getCommandDescription } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
-import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip } from '@heroui/react';
+import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip, Avatar } from '@heroui/react';
 import { KeyTile } from '../KeyboardGrid/KeyTile';
 import { numberRow, topRow, homeRow, bottomRow, labelForKey } from '../../utils/keys';
 import { windowCommandItems } from '../../data/windowCommands';
@@ -340,6 +340,8 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
   const [aiSuggestedKey, setAiSuggestedKey] = useState<string>('');
   const [aiRationale, setAiRationale] = useState<string>('');
   const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState<string>(aiKey || '');
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'key', 'shell'];
   const disabledTypes = new Set<CmdType>(['shell']);
   const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon' };
@@ -360,7 +362,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
       disabled: takenInnerKeys.includes(code.toLowerCase()),
     }));
   }, [allKeyCodes, takenInnerKeys]);
-  const appItems = useMemo(() => apps.map(a => ({ id: a.name, label: a.name })), [apps]);
+  const appItems = useMemo(() => apps.map(a => ({ id: a.name, label: a.name, iconUrl: a.iconUrl, categoryLabel: a.categoryLabel })), [apps]);
 
   // Window command helpers
   const [windowQuery, setWindowQuery] = useState<string>('');
@@ -453,70 +455,96 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
     return typeOk && innerKeyOk && notBlocked;
   }, [type, text, keyPress, innerKey, isKeyLevel, isAIMode, isBlocked]);
 
-  // Simple mnemonic-based suggestion per philosophy
+  // Improved mnemonic + ergonomics suggestion with rationale
   function suggestInnerKey(): { key: string | null; reason: string } {
     const available = allKeyCodes
       .map((c) => c.toLowerCase())
       .filter((c) => !takenInnerKeys.includes(c));
     const isLetter = (c: string) => /^[a-z]$/.test(c);
     const availableLetters = available.filter(isLetter);
-    // Build candidate letters from name depending on type
+
+    // Preference order by comfort: home > top > bottom (letters only)
+    const comfortOrder = [
+      ...homeRow,
+      ...topRow,
+      ...bottomRow,
+    ].map((c) => c.toLowerCase());
+    const comfortOrderLetters = Array.from(new Set(comfortOrder.filter(isLetter)));
+    const comfortRank = (c: string) => {
+      const i = comfortOrderLetters.indexOf(c);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+
+    // Build candidate mnemonic letters from the name, favoring word initials
     let sourceLabel = (text || '').trim();
     if (type === 'raycast') {
-      // Try to parse last path segment of a Raycast deeplink: raycast://extensions/owner/ext/command
       try {
         const raw = sourceLabel.replace(/^"|"$/g, '');
         const last = raw.split('/').filter(Boolean).pop() || raw;
         sourceLabel = last.replace(/[?#].*$/, '');
       } catch {
-        // ignore parse issues
+        // ignore
       }
     }
     const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const words = slug.split(/\s+/).filter(Boolean);
-    const lettersFromWords: string[] = [];
+    const stop = new Set(['the','a','an','of','and','for','to','in','on','with','by','at']);
+    const words = slug.split(/\s+/).filter((w) => w && !stop.has(w));
+    const initials = Array.from(new Set(words.map((w) => w[0]).filter((ch) => /[a-z]/.test(ch))));
+    const others: string[] = [];
     for (const w of words) {
-      for (const ch of w) {
-        if (/[a-z]/.test(ch)) lettersFromWords.push(ch);
-      }
+      for (const ch of w.slice(1)) if (/[a-z]/.test(ch)) others.push(ch);
     }
-    const nameLetters = Array.from(new Set(lettersFromWords));
+    const uniqueOthers = Array.from(new Set(others));
+    // Add app category-derived letters (from LSApplicationCategoryType) when selecting an app
+    const categoryLetters: string[] = [];
+    if (type === 'app') {
+      const match = apps.find(a => a.name.toLowerCase() === sourceLabel.toLowerCase());
+      const uti = match?.category || '';
+      const tail = uti.split('.').pop() || '';
+      // Example: "productivity", "developer-tools" -> take first letters of tokens
+      const tokens = tail.split('-').filter(Boolean);
+      for (const t of tokens) if (t[0] && /[a-z]/.test(t[0])) categoryLetters.push(t[0]);
+    }
+    const mnemonicCandidates = [...categoryLetters, ...initials, ...uniqueOthers];
 
-    const firstInitial = nameLetters[0];
-    // 1) Exact initial or any remaining mnemonic letter from the name/slug
-    for (const [idx, ch] of nameLetters.entries()) {
-      if (ch && availableLetters.includes(ch)) {
-        if (idx === 0) {
-          return { key: ch, reason: `Picked ${ch.toUpperCase()} from the name “${sourceLabel}”.` };
-        }
-        const why = firstInitial && firstInitial !== ch && !availableLetters.includes(firstInitial)
-          ? `First letter ${firstInitial.toUpperCase()} is taken; `
-          : '';
-        return { key: ch, reason: `${why}Picked ${ch.toUpperCase()} from the name “${sourceLabel}”.` };
-      }
+    // 1) Best mnemonic available by comfort
+    const mnemonicAvailable = mnemonicCandidates.filter((ch) => availableLetters.includes(ch));
+    if (mnemonicAvailable.length) {
+      const choice = mnemonicAvailable.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best));
+      const isCat = categoryLetters.includes(choice);
+      const isInitial = initials.includes(choice);
+      const whyInitial = isCat ? 'category letter' : (isInitial ? 'first letter' : 'mnemonic letter');
+      const first = initials[0];
+      const pre = first && choice !== first && !availableLetters.includes(first)
+        ? `First letter ${first.toUpperCase()} is taken; `
+        : '';
+      const rowHint = comfortRank(choice) <= comfortRank('a') ? ' on a comfortable row' : '';
+      return { key: choice, reason: `${pre}Picked ${choice.toUpperCase()} — ${whyInitial} from “${sourceLabel}”${rowHint}.` };
     }
 
-    // 2) Category initial fallback
+    // 2) Category initial fallback (by command type; for app, we already tried app category above)
     const categoryInitial: Record<CmdType, string> = { app: 'a', window: 'w', raycast: 'r', shell: 's', key: 'k' };
     const cat = categoryInitial[type];
-    if (cat && availableLetters.includes(cat)) {
-      const pre = firstInitial && !availableLetters.includes(firstInitial)
-        ? `First letter ${firstInitial.toUpperCase()} is taken; `
-        : `No clear mnemonic letter available; `;
-      return { key: cat, reason: `${pre}picked category letter ${cat.toUpperCase()} for ${type}.` };
+    if (type !== 'app' && cat && availableLetters.includes(cat)) {
+      return { key: cat, reason: `No mnemonic letters free; picked category letter ${cat.toUpperCase()} for ${type}.` };
     }
 
-    // 3) Next-best: first free letter
+    // 3) Next-best: any free letter by comfort
     if (availableLetters.length) {
-      const pre = firstInitial && !availableLetters.includes(firstInitial)
-        ? `First letter ${firstInitial.toUpperCase()} is taken; `
-        : `No clear mnemonic letter available; `;
-      return { key: availableLetters[0], reason: `${pre}picked the first free letter ${availableLetters[0].toUpperCase()}.` };
+      const choice = availableLetters.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best));
+      return { key: choice, reason: `No mnemonic or category letter free; picked comfortable letter ${choice.toUpperCase()}.` };
     }
 
-    // 4) Last resort: any free key (non-letter)
-    if (available.length) {
-      return { key: available[0], reason: `No letters available — picked the first free key ${labelForKey(available[0])}.` };
+    // 4) Last resort: any free non-letter (prefer comfortable area order: home/top/bottom/number)
+    const nonLetterPreferred = [
+      ...homeRow,
+      ...topRow,
+      ...bottomRow,
+      ...numberRow,
+    ].map((c) => c.toLowerCase()).filter((c) => !isLetter(c));
+    const anyNonLetter = nonLetterPreferred.find((c) => available.includes(c)) || available[0];
+    if (anyNonLetter) {
+      return { key: anyNonLetter, reason: `No letters available — picked free key ${labelForKey(anyNonLetter)}.` };
     }
     return { key: null, reason: 'No free keys available in this sublayer.' };
   }
@@ -549,7 +577,20 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
             onSelectionChange={(key) => setText(String(key || ''))}
           >
             {(item) => (
-              <AutocompleteItem key={item.id}>
+              <AutocompleteItem
+                key={item.id}
+                textValue={item.label}
+                startContent={
+                  item.iconUrl ? (
+                    <Avatar src={item.iconUrl} radius="sm" className="w-4 h-4" />
+                  ) : (
+                    <div className="w-4 h-4 rounded-sm bg-default-200" />
+                  )
+                }
+                endContent={item.categoryLabel ? (
+                  <span className="text-tiny text-default-400">{item.categoryLabel}</span>
+                ) : null}
+              >
                 {item.label}
               </AutocompleteItem>
             )}
@@ -597,13 +638,15 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
             )}
           </div>
         )}
-        {!hasAIKey && isAIMode && (
-          <Input
-            label="Gemini API key"
-            placeholder="Paste your Gemini API key to enable suggestions"
-            value={aiKey}
-            onChange={(e) => setAIKey(e.target.value)}
-          />
+        {isAIMode && (
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-default-500">
+              {hasAIKey ? 'Gemini suggestions enabled' : 'Gemini suggestions disabled'}
+            </div>
+            <Button size="sm" variant="flat" onPress={() => { setApiKeyInput(aiKey || ''); setShowApiKeyModal(true); }}>
+              {hasAIKey ? 'Update API key' : 'Set API key'}
+            </Button>
+          </div>
         )}
         {type === 'raycast' && (
           <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="right">
@@ -675,7 +718,6 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
                 onPress={async () => {
                   setIsSuggesting(true);
                   try {
-                    // Placeholder: local heuristic suggestion per philosophy. Hook Gemini here later.
                     const { key, reason } = suggestInnerKey();
                     if (key) {
                       setAiSuggestedKey(key);
@@ -696,6 +738,38 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
         )}
       </div>
       {/* Confirm delete inner command */}
+      {/* Update API key modal */}
+      <Modal
+        open={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        isDismissable={true}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <h3 className="text-base font-semibold">Gemini API key</h3>
+          <Input
+            type="password"
+            label="API key"
+            placeholder="Paste your Gemini API key"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <Button variant="solid" color="default" className="text-black" onPress={() => setShowApiKeyModal(false)}>Cancel</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              onPress={() => {
+                setAIKey(apiKeyInput.trim());
+                setShowApiKeyModal(false);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         open={confirmDeleteCmdOpen}
         onClose={() => setConfirmDeleteCmdOpen(false)}

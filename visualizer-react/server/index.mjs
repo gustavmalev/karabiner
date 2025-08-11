@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { exec } from 'child_process';
+import crypto from 'crypto';
 import { PORT, KARABINER_JSON, USER_KARABINER_JSON, RULES_TS, VISUALIZER_DIR, readKarabinerJson, parseRulesConfig, generateRulesTs, writeRulesTs } from './config.mjs';
 import { analyze } from './analyze.mjs';
 import { serveStatic } from './static.mjs';
@@ -82,6 +83,112 @@ async function listInstalledApps() {
   return apps;
 }
 
+// Read and parse Info.plist as JSON via plutil
+async function readInfoPlistJSON(appPath) {
+  const plist = path.join(appPath, 'Contents', 'Info.plist');
+  if (!fs.existsSync(plist)) return null;
+  return new Promise((resolve) => {
+    exec(`plutil -convert json -o - ${JSON.stringify(plist)}`, (err, stdout) => {
+      if (err) return resolve(null);
+      try {
+        resolve(JSON.parse(String(stdout || '{}')));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function categoryLabelFromUTI(uti) {
+  if (!uti) return undefined;
+  const m = String(uti).split('.').pop();
+  if (!m) return undefined;
+  // simple label: split hyphens and capitalize
+  return m
+    .split('-')
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
+}
+
+function hashPath(p) {
+  return crypto.createHash('sha1').update(p).digest('hex');
+}
+
+function ensureDir(d) {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+}
+
+// Attempt to find an .icns file referenced by the app bundle
+function findIcnsForApp(plist, appPath) {
+  const resources = path.join(appPath, 'Contents', 'Resources');
+  if (!fs.existsSync(resources)) return null;
+  let cand = null;
+  const addExt = (n) => (n.toLowerCase().endsWith('.icns') ? n : `${n}.icns`);
+  const tryFile = (n) => {
+    const f = path.join(resources, addExt(n));
+    return fs.existsSync(f) ? f : null;
+  };
+  if (plist) {
+    if (plist.CFBundleIconFile) cand = tryFile(plist.CFBundleIconFile);
+    if (!cand && plist.CFBundleIcons && plist.CFBundleIcons.CFBundlePrimaryIcon && Array.isArray(plist.CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles)) {
+      for (const n of plist.CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconFiles) {
+        cand = tryFile(n);
+        if (cand) break;
+      }
+    }
+  }
+  if (!cand) {
+    // common fallbacks
+    const guesses = ['AppIcon', 'Icon', 'icon', 'appicon'];
+    for (const g of guesses) {
+      cand = tryFile(g);
+      if (cand) break;
+    }
+  }
+  return cand;
+}
+
+// Convert icns to png and cache in tmp
+async function getOrCreateIconPng(appPath, size = 64) {
+  const tmp = path.join(os.tmpdir(), 'karabiner-app-icons');
+  ensureDir(tmp);
+  const key = `${hashPath(appPath)}-${size}.png`;
+  const outPng = path.join(tmp, key);
+  if (fs.existsSync(outPng)) return outPng;
+  const plist = await readInfoPlistJSON(appPath);
+  const icns = findIcnsForApp(plist, appPath);
+  if (!icns) return null;
+  return new Promise((resolve) => {
+    exec(`sips -s format png ${JSON.stringify(icns)} --out ${JSON.stringify(outPng)}`, (err) => {
+      if (!err && fs.existsSync(outPng)) return resolve(outPng);
+      // Fallback: try QuickLook thumbnail of the app bundle
+      exec(`qlmanage -t -s ${size} -o ${JSON.stringify(tmp)} ${JSON.stringify(appPath)}`, () => {
+        // Find most recent png in tmp for this app hash
+        try {
+          const files = fs.readdirSync(tmp).filter((f) => f.endsWith('.png'));
+          if (files.length) {
+            const full = files.map((f) => ({ f, t: fs.statSync(path.join(tmp, f)).mtimeMs }))
+              .sort((a, b) => b.t - a.t)[0].f;
+            fs.copyFileSync(path.join(tmp, full), outPng);
+            return resolve(outPng);
+          }
+        } catch {}
+        resolve(null);
+      });
+    });
+  });
+}
+
+async function enrichApp(app) {
+  const plist = await readInfoPlistJSON(app.path);
+  const bundleId = plist?.CFBundleIdentifier;
+  const name = plist?.CFBundleDisplayName || plist?.CFBundleName || app.name;
+  const category = plist?.LSApplicationCategoryType;
+  const categoryLabel = categoryLabelFromUTI(category);
+  const iconUrl = `/api/app-icon?path=${encodeURIComponent(app.path)}`;
+  return { name, path: app.path, bundleId, category, categoryLabel, iconUrl };
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', 'http://localhost');
@@ -98,8 +205,30 @@ const server = createServer(async (req, res) => {
       }
 
     if (url.pathname === '/api/apps' && req.method === 'GET') {
-      const apps = await listInstalledApps();
-      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(apps));
+      const baseApps = await listInstalledApps();
+      const enriched = await Promise.all(baseApps.map(enrichApp));
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(enriched));
+      return;
+    }
+
+    if (url.pathname === '/api/app-icon' && req.method === 'GET') {
+      const appPath = url.searchParams.get('path');
+      const size = Math.max(32, Math.min(256, Number(url.searchParams.get('size') || 64)));
+      if (!appPath) {
+        res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'path required' }));
+        return;
+      }
+      try {
+        const png = await getOrCreateIconPng(appPath, size);
+        if (png && fs.existsSync(png)) {
+          const buf = fs.readFileSync(png);
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }).end(buf);
+        } else {
+          res.writeHead(404).end();
+        }
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'icon generation failed' }));
+      }
       return;
     }
 

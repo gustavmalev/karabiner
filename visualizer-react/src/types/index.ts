@@ -19,4 +19,11 @@ export type Data = {
   };
 };
 
-export type AppInfo = { name: string; bundleId?: string; path?: string };
+export type AppInfo = {
+  name: string;
+  bundleId?: string;
+  path?: string;
+  category?: string; // LSApplicationCategoryType, e.g. "public.app-category.productivity"
+  categoryLabel?: string; // Human label derived from category, e.g. "Productivity"
+  iconUrl?: string; // Server-exposed PNG endpoint for app icon
+};
