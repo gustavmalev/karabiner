@@ -190,6 +190,29 @@ main {
   border-color: var(--amber);
   box-shadow: 0 0 0 3px rgba(245,158,11,.2);
 }
+
+/* Full-button state colors */
+.key.sublayer,
+.key.custom,
+.key.available,
+.key.thirdparty,
+.key.locked {
+  color: #fff;
+  font-weight: 600;
+}
+
+.key.sublayer { background: var(--violet); border-color: rgba(124,58,237,.8); }
+.key.custom { background: var(--accent); border-color: rgba(14,165,233,.8); }
+.key.available { background: var(--success); border-color: rgba(22,163,74,.8); }
+.key.thirdparty { background: var(--amber); border-color: rgba(245,158,11,.8); color: #fff; }
+.key.locked { background: var(--danger); border-color: rgba(239,68,68,.85); }
+
+/* Hide tiny dot when fully colored */
+.key.sublayer::after,
+.key.custom::after,
+.key.available::after,
+.key.thirdparty::after,
+.key.locked::after { display: none; }
 .cmd-list {
   list-style: none;
   padding: 0;
@@ -877,16 +900,9 @@ main {
 
 /* Solid fills using legend colors */
 
-/* Revert key color fills to original subtle style */
-.key { background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; text-shadow: none !important; }
-.key.taken { --state-dot: var(--danger); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
-.key.sublayer { --state-dot: var(--violet); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
-.key.available { --state-dot: var(--success); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
-.key.thirdparty { --state-dot: var(--amber); background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
 
 /* Restore centered container max-width (updated wider) */
 main { max-width: 1800px !important; margin: 0 auto !important; }
 
-/* Restore status dot visibility and selection styling */
-.key::after { display: block !important; }
+/* Selection styling (preserve box-shadow without altering fill) */
 .key.selected { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }

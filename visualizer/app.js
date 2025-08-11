@@ -338,6 +338,25 @@ const renderer = {
             key.classList.add(state === 'thirdParty' ? 'thirdparty' : state);
           }
         });
+
+        // Helpful tooltip; CSS will color whole key based on classes
+        let primaryState = null;
+        if (states.sublayer) primaryState = 'sublayer';
+        else if (states.custom) primaryState = 'custom';
+        else if (states.available) primaryState = 'available';
+        else if (states.thirdParty) primaryState = 'thirdparty';
+        else if (states.locked) primaryState = 'locked';
+
+        if (primaryState) {
+          const titleMap = {
+            sublayer: 'This key opens a Layer (Sublayer)',
+            custom: 'This key triggers a Single Command',
+            available: 'This key is free – ready to become a Layer or Command',
+            thirdparty: 'This key is taken by third-party fallback',
+            locked: 'This key is locked'
+          };
+          key.title = titleMap[primaryState] || '';
+        }
         
         // Filter visibility
         const shouldShow = (
