@@ -1,9 +1,43 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppState } from '../../state/appState';
 import { KeyTile } from './KeyTile';
 import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
+// No extra UI elements here to keep layout clean
 
 export function KeyboardGrid() {
   const { state, dispatch } = useAppState();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  // Measure container width to size keys to the box
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0].contentRect.width;
+      setContainerWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const rows = useMemo(() => [numberRow, topRow, homeRow, bottomRow], []);
+  const offsets = useMemo(() => [0, 0.5, 1, 1.5], []);
+
+  // Base gap between keys in px (responsive but bounded)
+  const gap = Math.min(16, Math.max(10, Math.round(containerWidth / 100)));
+  const keySize = useMemo(() => {
+    if (!containerWidth) return 36; // sensible default
+    // Compute size so EACH row (with its offset) fits; pick the smallest candidate
+    const candidates = rows.map((r, i) => {
+      const len = r.length;
+      const off = offsets[i] ?? 0;
+      return (containerWidth - (len - 1) * gap) / (len + off);
+    });
+    const size = Math.min(...candidates);
+    // clamp key size
+    return Math.max(28, Math.min(72, size));
+  }, [containerWidth, rows, offsets, gap]);
 
   const sublayerByKey = new Set<string>(state.data?.base.sublayerKeys || []);
   const customByKey = new Set<string>((state.data?.base.customKeys || []).map((c) => c.key));
@@ -40,31 +74,40 @@ export function KeyboardGrid() {
     return cls === f;
   };
 
-  const Row = ({ label, keys }: { label: string; keys: string[] }) => (
-    <div className="grid grid-cols-12 items-start gap-2">
-      <div className="col-span-12 flex items-center gap-2 text-xs text-slate-500">
-        <div className="w-20 shrink-0 text-right pr-2 uppercase tracking-wide">{label}</div>
-        <div className="h-px flex-1 bg-slate-200" />
-      </div>
-      <div className="col-span-12 flex flex-wrap gap-2">
-        {keys.filter(passesFilter).map((code) => (
-          <KeyTile
-            key={code}
-            code={code}
-            state={classify(code)}
-            onClick={() => dispatch({ type: 'setCurrentLayerKey', key: code })}
-          />
-        ))}
-      </div>
+  const Row = ({ keys, offsetUnits }: { keys: string[]; offsetUnits: number }) => (
+    <div
+      className={"flex"}
+      style={{
+        gap: `var(--key-gap)`,
+        marginLeft: `calc(var(--key-size) * ${offsetUnits})`,
+      }}
+    >
+      {keys.filter(passesFilter).map((code) => (
+        <KeyTile
+          key={code}
+          code={code}
+          state={classify(code)}
+          onClick={() => dispatch({ type: 'setCurrentLayerKey', key: code })}
+        />
+      ))}
     </div>
   );
 
   return (
-    <div className="space-y-4">
-      <Row label="Number" keys={numberRow} />
-      <Row label="Top" keys={topRow} />
-      <Row label="Home" keys={homeRow} />
-      <Row label="Bottom" keys={bottomRow} />
+    <div
+      ref={containerRef}
+      className="space-y-2"
+      style={{
+        // expose CSS vars so children can size
+        ['--key-size' as any]: `${keySize}px`,
+        ['--key-gap' as any]: `${gap}px`,
+      }}
+    >
+      {/* Offsets in key units so they scale with size */}
+      <Row keys={numberRow} offsetUnits={0} />
+      <Row keys={topRow} offsetUnits={0.5} />
+      <Row keys={homeRow} offsetUnits={1} />
+      <Row keys={bottomRow} offsetUnits={1.5} />
     </div>
   );
 }

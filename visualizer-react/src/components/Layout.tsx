@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button, Navbar, NavbarBrand, NavbarContent } from '@heroui/react';
 import { useAppState } from '../state/appState';
 import { saveConfig } from '../api/client';
 
@@ -17,24 +18,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto max-w-7xl p-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold">Visualizer</h1>
-            <div className="flex items-center gap-2">
-              <button
-                className={`rounded-md border px-3 py-1.5 text-sm ${state.isDirty ? 'border-emerald-500 text-emerald-700 hover:bg-emerald-50' : 'opacity-50'}`}
-                disabled={!state.isDirty}
-                onClick={onSave}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-7xl p-4">{children}</main>
+    <div className="min-h-screen light bg-background text-foreground">
+      <Navbar maxWidth="2xl" isBordered>
+        <NavbarBrand>
+          <h1 className="text-base font-semibold">Visualizer</h1>
+        </NavbarBrand>
+        <NavbarContent justify="end">
+          <Button color="primary" isDisabled={!state.isDirty} onPress={onSave}>
+            Save
+          </Button>
+        </NavbarContent>
+      </Navbar>
+      <main className="mx-auto max-w-screen-2xl p-4 md:p-6">{children}</main>
     </div>
   );
 }

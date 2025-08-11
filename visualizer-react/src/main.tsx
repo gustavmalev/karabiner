@@ -4,11 +4,14 @@ import './index.css'
 import './globals.css'
 import App from './App.tsx'
 import { AppStateProvider } from './state/appState'
+import { HeroUIProvider } from '@heroui/react'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppStateProvider>
-      <App />
-    </AppStateProvider>
+    <HeroUIProvider>
+      <AppStateProvider>
+        <App />
+      </AppStateProvider>
+    </HeroUIProvider>
   </StrictMode>,
 )

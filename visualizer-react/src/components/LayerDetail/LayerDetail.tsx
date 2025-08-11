@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppState } from '../../state/appState';
-import { buildCommandFrom, getCommandDescription, parseTypeTextFrom } from '../../utils/commands';
+import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
+import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody } from '@heroui/react';
+import { KeyTile } from '../KeyboardGrid/KeyTile';
+import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
 
 type CmdType = 'app' | 'window' | 'raycast' | 'shell' | 'key';
 
@@ -10,7 +13,35 @@ export function LayerDetail() {
   const { state, dispatch } = useAppState();
   const key = state.currentLayerKey;
   const layer = key ? state.config?.layers[key] : null;
-  const [showCmdModal, setShowCmdModal] = useState<null | { mode: 'add' | 'edit'; cmdKey?: string }>(null);
+  const [showCmdModal, setShowCmdModal] = useState<null | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string }>(null);
+
+  // sizing based on container
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const gap = Math.min(16, Math.max(10, Math.round(containerWidth / 120)));
+  const rows = useMemo(() => [numberRow, topRow, homeRow, bottomRow] as string[][], []);
+  const keySize = useMemo(() => {
+    if (!containerWidth) return 34;
+    // Offsets in "key units" used as margin-left = offset * keySize
+    const offsets = [0, 0.5, 1, 1.5];
+    // For each row, find the maximum key size that fits: width >= keySize*(len+offset) + gap*(len-1)
+    const candidates = rows.map((row, i) => {
+      const len = row.length;
+      const offset = offsets[i] ?? 0;
+      return (containerWidth - (len - 1) * gap) / (len + offset);
+    });
+    const size = Math.min(...candidates);
+    return Math.max(24, Math.min(72, size));
+  }, [containerWidth, rows, gap]);
 
   const onAddLayer = () => {
     if (!key) return;
@@ -61,46 +92,59 @@ export function LayerDetail() {
   };
 
   return (
-    <div className="rounded-lg border bg-white/5 p-4 min-h-40">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Layer Detail</h2>
-        {key && !layer && (
-          <button className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-white/10" onClick={onAddLayer}>
-            Add Layer
-          </button>
-        )}
-        {key && layer && (
-          <div className="flex items-center gap-2">
-            <button className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-white/10" onClick={() => setShowCmdModal({ mode: 'add' })}>
-              Add Command
-            </button>
-            <button className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm hover:bg-white/10" onClick={onDeleteLayer}>
-              Delete Layer
-            </button>
-          </div>
-        )}
-      </div>
+    <Card className="border">
+      <CardBody className="min-h-40 overflow-visible !p-2 md:!p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Layer Detail</h2>
+          {key && !layer && (
+            <Button size="sm" variant="flat" onPress={onAddLayer}>
+              Add Layer
+            </Button>
+          )}
+          {key && layer && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="flat" onPress={() => setShowCmdModal({ mode: 'add' })}>Add Command</Button>
+              <Button size="sm" variant="flat" color="danger" onPress={onDeleteLayer}>Delete Layer</Button>
+            </div>
+          )}
+        </div>
 
       {!key && <div className="text-sm text-slate-400">Select a base key to view details.</div>}
       {key && !layer && <div className="text-sm text-slate-400">No config for {key}.</div>}
       {key && layer && layer.type === 'sublayer' && (
-        <div className="space-y-2">
-          {Object.keys(sublayerCommands || {}).length === 0 && <div className="text-sm text-slate-400">No inner commands yet.</div>}
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(sublayerCommands || {}).map(([ik, cmd]) => (
-              <div key={ik} className="rounded-md border border-slate-200 bg-white p-2 text-xs">
-                <div className="mb-1 flex items-center justify-between">
-                  <div className="font-medium text-slate-800">{ik}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{parseTypeTextFrom(cmd).type}</span>
-                    <button className="rounded border border-slate-200 px-2 py-0.5 text-[11px] hover:bg-slate-50" onClick={() => setShowCmdModal({ mode: 'edit', cmdKey: ik })}>Edit</button>
-                    <button className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50" onClick={() => onDeleteInner(ik)}>Delete</button>
-                  </div>
-                </div>
-                <div className="text-slate-700">{getCommandDescription(cmd) || '—'}</div>
-              </div>
-            ))}
-          </div>
+        <div
+          ref={containerRef}
+          className="space-y-3"
+          style={{ ['--key-size' as any]: `${keySize}px`, ['--key-gap' as any]: `${gap}px` }}
+        >
+          <div className="text-xs text-default-500">Click a key to add/edit an inner command for this sublayer.</div>
+          {rows.map((row, idx) => (
+            <div
+              key={idx}
+              className={"flex"}
+              style={{ gap: 'var(--key-gap)', marginLeft: `calc(var(--key-size) * ${idx * 0.5})` }}
+            >
+              {row.map((code) => {
+                const existing = !!sublayerCommands?.[code.toLowerCase()];
+                const stateForKey: 'custom' | 'available' = existing ? 'custom' : 'available';
+                return (
+                  <KeyTile
+                    key={code}
+                    code={code.toLowerCase()}
+                    state={stateForKey}
+                    onClick={() =>
+                      existing
+                        ? setShowCmdModal({ mode: 'edit', cmdKey: code.toLowerCase() })
+                        : setShowCmdModal({ mode: 'add', prefill: code.toLowerCase() })
+                    }
+                  />
+                );
+              })}
+            </div>
+          ))}
+          {(!sublayerCommands || Object.keys(sublayerCommands).length === 0) && (
+            <div className="text-sm text-slate-400">No inner commands yet — choose a key to add one.</div>
+          )}
         </div>
       )}
 
@@ -116,16 +160,23 @@ export function LayerDetail() {
           }}
           takenKeys={Object.keys(sublayerCommands || {})}
           initial={(() => {
-            if (!showCmdModal || showCmdModal.mode === 'add' || !showCmdModal.cmdKey) return undefined;
-            const cmd = sublayerCommands?.[showCmdModal.cmdKey];
-            if (!cmd) return undefined;
-            const parsed = parseTypeTextFrom(cmd);
-            return { type: parsed.type as CmdType, text: (parsed as any).text || '', ignore: (parsed as any).ignoreRaycast || false, innerKey: showCmdModal.cmdKey };
+            if (!showCmdModal) return undefined;
+            if (showCmdModal.mode === 'add') {
+              return showCmdModal.prefill ? { type: 'app' as CmdType, text: '', ignore: false, innerKey: showCmdModal.prefill } : undefined;
+            }
+            if (showCmdModal.mode === 'edit' && showCmdModal.cmdKey) {
+              const cmd = sublayerCommands?.[showCmdModal.cmdKey];
+              if (!cmd) return undefined;
+              const parsed = parseTypeTextFrom(cmd);
+              return { type: parsed.type as CmdType, text: (parsed as any).text || '', ignore: (parsed as any).ignoreRaycast || false, innerKey: showCmdModal.cmdKey };
+            }
+            return undefined;
           })()}
           mode={showCmdModal?.mode || 'add'}
         />
       </Modal>
-    </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -140,37 +191,51 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   const [text, setText] = useState(initial?.text || '');
   const [ignore, setIgnore] = useState(!!initial?.ignore);
   const [innerKey, setInnerKey] = useState(initial?.innerKey || '');
+  const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
+  const keyOptions = useMemo(() => Array.from({ length: 26 }, (_, i) => ({ id: String.fromCharCode(97 + i) })), []);
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add Command'}</h3>
-      <div className="grid grid-cols-4 items-center gap-2 text-sm">
-        <label className="text-right text-slate-600">Type</label>
-        <select className="col-span-3 rounded border border-slate-300 bg-white p-2 text-slate-900" value={type} onChange={(e) => setType(e.target.value as CmdType)}>
-          <option value="app">app</option>
-          <option value="window">window</option>
-          <option value="raycast">raycast</option>
-          <option value="shell">shell</option>
-          <option value="key">key</option>
-        </select>
-        <label className="text-right text-slate-600">Text</label>
-        <input className="col-span-3 rounded border border-slate-300 bg-white p-2 text-slate-900" value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. Safari" />
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add Command'}</h3>
+      <div className="grid grid-cols-1 gap-4">
+        <Select
+          label="Type"
+          selectedKeys={new Set([type])}
+          onSelectionChange={(keys) => {
+            const v = Array.from(keys as Set<string>)[0] as CmdType | undefined;
+            if (v) setType(v);
+          }}
+        >
+          {typeOptions.map((t) => (
+            <SelectItem key={t}>
+              {t}
+            </SelectItem>
+          ))}
+        </Select>
+        <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
         {type === 'raycast' && (
-          <>
-            <label className="text-right text-slate-600">Ignore</label>
-            <input className="col-span-3" type="checkbox" checked={ignore} onChange={(e) => setIgnore(e.target.checked)} />
-          </>
+          <Switch isSelected={ignore} onValueChange={setIgnore}>
+            Ignore
+          </Switch>
         )}
-        <label className="text-right text-slate-600">Inner key</label>
-        <input className="col-span-3 rounded border border-slate-300 bg-white p-2 text-slate-900" value={innerKey} onChange={(e) => setInnerKey(e.target.value)} placeholder={`a-z${takenKeys.length ? `, taken: ${takenKeys.join(',')}` : ''}`} />
+        <Autocomplete
+          label="Inner key"
+          placeholder={`a-z${takenKeys.length ? `, taken: ${takenKeys.join(',')}` : ''}`}
+          defaultItems={keyOptions}
+          allowsCustomValue
+          inputValue={innerKey}
+          onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
+          onSelectionChange={(key) => setInnerKey(String(key || ''))}
+        >
+          {(item) => (
+            <AutocompleteItem key={item.id}>
+              {item.id}
+            </AutocompleteItem>
+          )}
+        </Autocomplete>
       </div>
       <div className="mt-2 flex justify-end gap-2">
-        <button className="rounded-md border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50" onClick={onCancel}>Cancel</button>
-        <button
-          className="rounded-md border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
-          onClick={() => onSave({ type, text, ignore, innerKey })}
-        >
-          Save
-        </button>
+        <Button variant="flat" onPress={onCancel}>Cancel</Button>
+        <Button color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
       </div>
     </div>
   );

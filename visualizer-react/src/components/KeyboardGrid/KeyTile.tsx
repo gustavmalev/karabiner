@@ -1,4 +1,5 @@
 import { labelForKey } from '../../utils/keys';
+import { Button, Kbd } from '@heroui/react';
 
 export function KeyTile({
   code,
@@ -11,41 +12,39 @@ export function KeyTile({
   onClick?: () => void;
   onToggleLock?: () => void;
 }) {
-  const style = {
-    sublayer: 'bg-blue-50 border-blue-200 text-blue-700',
-    custom: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-    available: 'bg-white border-slate-200 text-slate-900',
-    thirdparty: 'bg-amber-50 border-amber-200 text-amber-800',
-    locked: 'opacity-60 pointer-events-none bg-white border-slate-200 text-slate-500',
-  }[state];
+  const color: 'primary' | 'success' | 'warning' | 'default' =
+    state === 'sublayer' ? 'primary' : state === 'custom' ? 'success' : state === 'thirdparty' ? 'warning' : 'default';
+  const disabled = state === 'locked';
   return (
-    <div className={`relative inline-flex items-center`}> 
-      <button
-        onClick={onClick}
-        className={`rounded-md border px-3 py-2 text-sm font-medium ${style}`}
+    <div className="relative inline-flex items-center">
+      <Button
+        size="sm"
+        variant={state === 'available' ? 'bordered' : 'solid'}
+        color={color}
+        isDisabled={disabled}
+        onPress={onClick}
         title={code}
+        className="font-medium"
+        style={{
+          // Prefer CSS var set by parent; fallback to previous clamp sizes
+          width: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
+          minWidth: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
+          height: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
+          minHeight: 'calc(var(--key-size, 3rem) * var(--key-h, 0.85))',
+        }}
       >
-        <span className="inline-flex items-center gap-2">
-          {labelForKey(code)}
-          {state !== 'available' && (
-            <span className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-              {state}
-            </span>
-          )}
-        </span>
-      </button>
+        <Kbd style={{ fontSize: 'calc(var(--key-size, 3rem) * var(--key-font, 0.35))' }}>{labelForKey(code)}</Kbd>
+      </Button>
       {onToggleLock && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleLock();
-          }}
-          className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded border border-slate-200 bg-white text-xs hover:bg-slate-50"
+        <Button
+          size="sm"
+          variant="light"
+          onPress={onToggleLock}
+          className="ml-1"
           title="Toggle lock"
         >
           🔒
-        </button>
+        </Button>
       )}
     </div>
   );
