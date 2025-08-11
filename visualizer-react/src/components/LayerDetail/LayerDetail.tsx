@@ -203,8 +203,9 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   const [aiSuggestedKey, setAiSuggestedKey] = useState<string>('');
   const [aiRationale, setAiRationale] = useState<string>('');
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
-  const disabledTypes = new Set<CmdType>(['shell', 'key']);
-  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon' };
+  const disabledTypes = new Set<CmdType>(['shell', 'key', 'window']);
+  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon', window: 'Coming soon' };
+  const isAIMode = mode === 'add' && !initial?.innerKey; // Only the Add-with-AI path shows suggestion UI
 
   // Build full key list and mark taken ones as disabled
   const allKeyCodes = useMemo(() => [
@@ -229,12 +230,37 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
       .filter((c) => !takenInnerKeys.includes(c));
     const isLetter = (c: string) => /^[a-z]$/.test(c);
     const availableLetters = available.filter(isLetter);
-    const nameLetters = Array.from(new Set((text || '').toLowerCase().replace(/[^a-z]/g, '').split('')));
+    // Build candidate letters from name depending on type
+    let sourceLabel = (text || '').trim();
+    if (type === 'raycast') {
+      // Try to parse last path segment of a Raycast deeplink: raycast://extensions/owner/ext/command
+      try {
+        const raw = sourceLabel.replace(/^\"|\"$/g, '');
+        const last = raw.split('/').filter(Boolean).pop() || raw;
+        sourceLabel = last.replace(/[?#].*$/, '');
+      } catch {}
+    }
+    const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const words = slug.split(/\s+/).filter(Boolean);
+    const lettersFromWords: string[] = [];
+    for (const w of words) {
+      for (const ch of w) {
+        if (/[a-z]/.test(ch)) lettersFromWords.push(ch);
+      }
+    }
+    const nameLetters = Array.from(new Set(lettersFromWords));
 
-    // 1) Exact initial or any letter from the name
-    for (const ch of [nameLetters[0], ...nameLetters.slice(1)]) {
+    const firstInitial = nameLetters[0];
+    // 1) Exact initial or any remaining mnemonic letter from the name/slug
+    for (const [idx, ch] of nameLetters.entries()) {
       if (ch && availableLetters.includes(ch)) {
-        return { key: ch, reason: `Picked ${ch.toUpperCase()} from the name “${text}”.` };
+        if (idx === 0) {
+          return { key: ch, reason: `Picked ${ch.toUpperCase()} from the name “${sourceLabel}”.` };
+        }
+        const why = firstInitial && firstInitial !== ch && !availableLetters.includes(firstInitial)
+          ? `First letter ${firstInitial.toUpperCase()} is taken; `
+          : '';
+        return { key: ch, reason: `${why}Picked ${ch.toUpperCase()} from the name “${sourceLabel}”.` };
       }
     }
 
@@ -242,12 +268,18 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
     const categoryInitial: Record<CmdType, string> = { app: 'a', window: 'w', raycast: 'r', shell: 's', key: 'k' };
     const cat = categoryInitial[type];
     if (cat && availableLetters.includes(cat)) {
-      return { key: cat, reason: `Picked category letter ${cat.toUpperCase()} for ${type}.` };
+      const pre = firstInitial && !availableLetters.includes(firstInitial)
+        ? `First letter ${firstInitial.toUpperCase()} is taken; `
+        : `No clear mnemonic letter available; `;
+      return { key: cat, reason: `${pre}picked category letter ${cat.toUpperCase()} for ${type}.` };
     }
 
     // 3) Next-best: first free letter
     if (availableLetters.length) {
-      return { key: availableLetters[0], reason: `Picked the first free letter ${availableLetters[0].toUpperCase()}.` };
+      const pre = firstInitial && !availableLetters.includes(firstInitial)
+        ? `First letter ${firstInitial.toUpperCase()} is taken; `
+        : `No clear mnemonic letter available; `;
+      return { key: availableLetters[0], reason: `${pre}picked the first free letter ${availableLetters[0].toUpperCase()}.` };
     }
 
     // 4) Last resort: any free key (non-letter)
@@ -258,7 +290,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   }
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add with AI'}</h3>
+      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : (isAIMode ? 'Add with AI' : 'Add Command')}</h3>
       <div className="grid grid-cols-1 gap-4">
         <Select
           label="Type"
@@ -275,7 +307,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
           ))}
         </Select>
         <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
-        {!hasAIKey && mode === 'add' && (
+        {!hasAIKey && isAIMode && (
           <Input
             label="Gemini API key"
             placeholder="Paste your Gemini API key to enable suggestions"
@@ -288,7 +320,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
             Ignore
           </Switch>
         )}
-        {mode === 'edit' ? (
+        {!isAIMode ? (
           <Autocomplete
             label="Inner key"
             placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
@@ -325,7 +357,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
         <Tooltip content="Close without saving" placement="top">
           <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
         </Tooltip>
-        {mode === 'edit' ? (
+        {!isAIMode ? (
           <Tooltip content="Save command" placement="top">
             <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
           </Tooltip>
