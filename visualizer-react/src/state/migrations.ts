@@ -4,8 +4,11 @@ import { SCHEMA_VERSION, zPersisted, type Persisted } from './schema';
 // Map of migration steps from version n -> n+1
 // Each function must be a pure transformation and safe to run exactly once.
 const migrations: Record<number, (input: Record<string, unknown>) => Record<string, unknown>> = {
-  // 0 -> 1 example (placeholder). If we ever had version 0, we'd transform to 1.
-  // 0: (s) => ({ ...s, schemaVersion: 1 }),
+  // 1 -> 2: introduce blockedKeys (default {})
+  1: (s) => {
+    const blocked = typeof (s as any).blockedKeys === 'object' && (s as any).blockedKeys !== null ? (s as any).blockedKeys : {};
+    return { ...s, blockedKeys: blocked, schemaVersion: 2 } as Record<string, unknown>;
+  },
 };
 
 export function migrateToLatest(raw: unknown): Persisted {

@@ -15,6 +15,8 @@ export function LayerDetail() {
   const config = useStore((s) => s.config);
   const key = useStore((s) => s.currentLayerKey);
   const setConfig = useStore((s) => s.setConfig);
+  const blocked = useStore((s) => s.blockedKeys);
+  const toggleBlocked = useStore((s) => s.toggleBlocked);
   const layer = useStore(selectCurrentLayer);
   const [showCmdModal, setShowCmdModal] = useState<
     | null
@@ -58,6 +60,8 @@ export function LayerDetail() {
       [key]: { type: 'sublayer', commands: {} as Record<string, Command> },
     };
     setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+    // Clear blocked state when a layer is created for this key
+    if (blocked[key]) toggleBlocked(key);
   };
 
   const onDeleteLayer = () => {
@@ -75,6 +79,8 @@ export function LayerDetail() {
     if (isKeyLevel) {
       const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'command', command: cmd } as Layer };
       setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+      // Clear blocked state when a direct command is created for this key
+      if (blocked[key]) toggleBlocked(key);
     } else {
       const base: Layer = prev[key] || ({ type: 'sublayer', commands: {} as Record<string, Command> } as const);
       const commands = {
@@ -84,6 +90,8 @@ export function LayerDetail() {
       commands[innerKey] = cmd;
       const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
       setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+      // Creating the first inner command also implies the key is set up; clear blocked
+      if (blocked[key]) toggleBlocked(key);
     }
     setShowCmdModal(null);
   };
@@ -108,16 +116,26 @@ export function LayerDetail() {
     <Card className="border">
       <CardBody className="min-h-40 overflow-visible !p-2 md:!p-3">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Layer Detail</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold">Layer Detail</h2>
+            {key && !layer && (
+              <Tooltip content="Mark this base key as blocked by a third-party app. You won't be able to add or edit commands while blocked." placement="bottom">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-default-500">Blocked (3rd-party)</span>
+                  <Switch size="sm" isSelected={!!(key && blocked[key])} onValueChange={() => key && toggleBlocked(key)} />
+                </div>
+              </Tooltip>
+            )}
+          </div>
           {key && !layer && (
             <div className="flex items-center gap-2">
               <Tooltip content="Create a sublayer for this key" placement="left">
-                <Button size="sm" variant="solid" color="primary" onPress={onAddLayer}>
+                <Button size="sm" variant="solid" color="primary" onPress={onAddLayer} isDisabled={!!(key && blocked[key])}>
                   Add Layer
                 </Button>
               </Tooltip>
               <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left">
-                <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })}>
+                <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })} isDisabled={!!(key && blocked[key])}>
                   Add Key
                 </Button>
               </Tooltip>
@@ -149,7 +167,15 @@ export function LayerDetail() {
         </div>
 
       {!key && <div className="text-sm text-slate-400">Select a base key to view details.</div>}
-      {key && !layer && <div className="text-sm text-slate-400">No config for {key}.</div>}
+      {key && !layer && (
+        <div className="text-sm text-slate-400">
+          {blocked[key] ? (
+            <span>This key is marked as blocked. Unblock it to add a layer or a direct command.</span>
+          ) : (
+            <span>No config for {key}.</span>
+          )}
+        </div>
+      )}
       {key && layer && layer.type === 'sublayer' && (
         <div
           ref={containerRef}
@@ -244,6 +270,7 @@ export function LayerDetail() {
           })()}
           mode={showCmdModal?.mode || 'add'}
           isKeyLevel={showCmdModal?.kind === 'key'}
+          isBlocked={!!(key && !layer && blocked[key])}
           onDelete={() => {
             if (showCmdModal?.mode === 'edit' && showCmdModal.cmdKey) {
               onDeleteInner(showCmdModal.cmdKey);
@@ -291,7 +318,7 @@ export function LayerDetail() {
   );
 }
 
-function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel }: {
+function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel, isBlocked }: {
   onCancel: () => void;
   onSave: (v: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => void;
   takenKeys: string[];
@@ -299,6 +326,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
   mode: 'add' | 'edit';
   onDelete?: () => void;
   isKeyLevel?: boolean;
+  isBlocked?: boolean;
 }) {
   const apps = useStore((s) => s.apps);
   const aiKey = useStore((s) => s.aiKey);
@@ -414,7 +442,16 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
     const base = keyPress.key_code ? labelForKey(keyPress.key_code) : '';
     return [...mods.map(m => m.toUpperCase()), base].filter(Boolean).join(' + ');
   }, [keyPress]);
-  const canSave = type !== 'key' || !!keyPress.key_code;
+  const canSave = useMemo(() => {
+    const textTrim = (text || '').trim();
+    const typeOk = (
+      (type === 'key' && !!keyPress.key_code) ||
+      (type !== 'key' && textTrim.length > 0)
+    );
+    const innerKeyOk = isKeyLevel || isAIMode || !!innerKey;
+    const notBlocked = !isBlocked;
+    return typeOk && innerKeyOk && notBlocked;
+  }, [type, text, keyPress, innerKey, isKeyLevel, isAIMode, isBlocked]);
 
   // Simple mnemonic-based suggestion per philosophy
   function suggestInnerKey(): { key: string | null; reason: string } {

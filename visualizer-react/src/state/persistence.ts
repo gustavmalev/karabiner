@@ -29,6 +29,7 @@ export function buildPersisted(input: {
   filter: Persisted['filter'];
   keyboardLayout: Persisted['keyboardLayout'];
   aiKey: Persisted['aiKey'];
+  blockedKeys: Persisted['blockedKeys'];
 }): Persisted {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -37,6 +38,7 @@ export function buildPersisted(input: {
     filter: input.filter,
     keyboardLayout: input.keyboardLayout,
     aiKey: input.aiKey ?? '',
+    blockedKeys: input.blockedKeys ?? {},
   };
 }
 

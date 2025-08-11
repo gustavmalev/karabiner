@@ -8,9 +8,10 @@ import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
 export function KeyboardGrid() {
   const data = useStore((s) => s.data);
   const config = useStore((s) => s.config);
+  const blockedKeys = useStore((s) => s.blockedKeys);
   const filter = useStore((s) => s.filter);
   const setCurrentLayerKey = useStore((s) => s.setCurrentLayerKey);
-  const { classify } = useMemo(() => buildKeyClassification(data, config), [data, config]);
+  const { classify } = useMemo(() => buildKeyClassification(data, config, blockedKeys), [data, config, blockedKeys]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
 

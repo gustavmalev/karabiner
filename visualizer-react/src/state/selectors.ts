@@ -35,10 +35,19 @@ export const selectCurrentLayerCommands = (s: StoreState): Record<KeyCode, Comma
   return undefined;
 };
 
-export function buildKeyClassification(data: Data | null, config: Config | null) {
+export function buildKeyClassification(
+  data: Data | null,
+  config: Config | null,
+  blockedKeys?: Readonly<Record<KeyCode, boolean>> | null,
+) {
   const sublayerByKey = new Set<string>(data?.base.sublayerKeys || []);
   const customByKey = new Set<string>((data?.base.customKeys || []).map((c) => c.key));
   const thirdPartyByKey = new Set<string>(data?.base.fallbackKeys || []);
+  if (blockedKeys) {
+    for (const [k, v] of Object.entries(blockedKeys)) {
+      if (v) thirdPartyByKey.add(k);
+    }
+  }
   const availableByKey = new Set<string>();
 
   const layers: Record<string, Layer> = config?.layers ?? {} as Record<string, Layer>;
@@ -106,7 +115,7 @@ export const selectCurrentLayerInnerKeys = (s: StoreState): KeyCode[] =>
 // Derived classification for current store snapshot
 // Note: do not use selectKeyClassification directly in useStore; it returns a new object.
 // Prefer computing via useMemo in components: buildKeyClassification(data, config)
-export const selectKeyClassification = (s: StoreState) => buildKeyClassification(s.data, s.config);
+export const selectKeyClassification = (s: StoreState) => buildKeyClassification(s.data, s.config, s.blockedKeys);
 
 // Normalization helpers
 export const selectLayersById = (s: StoreState): Record<KeyCode, Layer> => s.config?.layers ?? (EMPTY_LAYERS as Record<KeyCode, Layer>);

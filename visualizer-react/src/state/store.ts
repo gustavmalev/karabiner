@@ -17,6 +17,7 @@ export type StoreState = {
   currentLayerKey: KeyCode | null;
   filter: Filter;
   locks: Record<KeyCode, boolean>;
+  blockedKeys: Record<KeyCode, boolean>;
   keyboardLayout: KeyboardLayout;
   aiKey: string;
   // status
@@ -33,6 +34,7 @@ export type StoreState = {
   setCurrentLayerKey: (key: KeyCode | null) => void;
   setFilter: (filter: Filter) => void;
   toggleLock: (key: KeyCode) => void;
+  toggleBlocked: (key: KeyCode) => void;
   setKeyboardLayout: (layout: KeyboardLayout) => void;
   setAIKey: (aiKey: string) => void;
   markDirty: () => void;
@@ -48,6 +50,7 @@ type StoreBase = {
   currentLayerKey: KeyCode | null;
   filter: Filter;
   locks: Record<KeyCode, boolean>;
+  blockedKeys: Record<KeyCode, boolean>;
   keyboardLayout: KeyboardLayout;
   aiKey: string;
   isDirty: boolean;
@@ -63,6 +66,7 @@ const initial = (): StoreBase => ({
   currentLayerKey: null,
   filter: 'all',
   locks: {},
+  blockedKeys: {},
   keyboardLayout: 'ansi',
   aiKey: '',
   isDirty: false,
@@ -88,6 +92,9 @@ export const useStore = create<StoreState>((set, _get) => ({
   setFilter: (filter) => set({ filter }),
   toggleLock: (key) => set((prev) => ({
     locks: { ...prev.locks, [key]: !prev.locks[key] } as Record<KeyCode, boolean>,
+  } as Partial<StoreState> as StoreState)),
+  toggleBlocked: (key) => set((prev) => ({
+    blockedKeys: { ...prev.blockedKeys, [key]: !prev.blockedKeys[key] } as Record<KeyCode, boolean>,
   } as Partial<StoreState> as StoreState)),
   setKeyboardLayout: (layout) => set({ keyboardLayout: layout }),
   setAIKey: (aiKey) => set({ aiKey }),
@@ -128,6 +135,7 @@ export async function initializeStore() {
       config: persisted.config,
       filter: persisted.filter,
       locks: persisted.locks,
+      blockedKeys: persisted.blockedKeys,
       keyboardLayout: persisted.keyboardLayout,
       aiKey: persisted.aiKey,
       isDirty: false,
@@ -146,9 +154,10 @@ export async function initializeStore() {
 export const enableStorePersistence = true;
 
 // Subscribe to changes and persist locally with debounce when dirty
-let prevSnapshot: Pick<StoreState, 'config' | 'locks' | 'filter' | 'keyboardLayout' | 'aiKey' | 'isDirty'> = {
+let prevSnapshot: Pick<StoreState, 'config' | 'locks' | 'blockedKeys' | 'filter' | 'keyboardLayout' | 'aiKey' | 'isDirty'> = {
   config: null,
   locks: {},
+  blockedKeys: {},
   filter: 'all',
   keyboardLayout: 'ansi',
   aiKey: '',
@@ -160,6 +169,7 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
     const snap = {
       config: state.config,
       locks: state.locks,
+      blockedKeys: state.blockedKeys,
       filter: state.filter,
       keyboardLayout: state.keyboardLayout,
       aiKey: state.aiKey,
@@ -169,6 +179,7 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
     const changed =
       snap.config !== prevSnapshot.config ||
       snap.locks !== prevSnapshot.locks ||
+      snap.blockedKeys !== prevSnapshot.blockedKeys ||
       snap.filter !== prevSnapshot.filter ||
       snap.keyboardLayout !== prevSnapshot.keyboardLayout ||
       snap.aiKey !== prevSnapshot.aiKey ||
@@ -180,6 +191,7 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
         const p = buildPersisted({
           config: snap.config,
           locks: snap.locks,
+          blockedKeys: snap.blockedKeys,
           filter: snap.filter,
           keyboardLayout: snap.keyboardLayout,
           aiKey: snap.aiKey,
