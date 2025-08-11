@@ -676,18 +676,17 @@ const ui = {
   },
 
   deleteLayer(layerKey) {
-    if (confirm(`Are you sure you want to delete the "${layerKey}" layer?`)) {
-      delete appState.config.layers[layerKey];
-      utils.markDirty();
-      
-      // Refresh the display using local state (avoid overwriting unsaved changes)
-      renderer.renderBaseGrid();
-      
-      // Clear detail panel
-      document.getElementById('detail').innerHTML = '<div class="empty"><p>Select a key to edit its configuration</p></div>';
-      
-      ui.showToast('Layer deleted successfully');
-    }
+    // Delete immediately without native confirm
+    delete appState.config.layers[layerKey];
+    utils.markDirty();
+    
+    // Refresh the display using local state (avoid overwriting unsaved changes)
+    renderer.renderBaseGrid();
+    
+    // Clear detail panel
+    document.getElementById('detail').innerHTML = '<div class="empty"><p>Select a key to edit its configuration</p></div>';
+    
+    ui.showToast('Layer deleted successfully');
   },
 
   addCommand(layerKey) {
@@ -720,9 +719,13 @@ const ui = {
     if (typeSel) typeSel.value = 'app';
     if (textInp) textInp.value = '';
     ui.renderCommandConfig('cmd', 'app');
-    // In add mode, hide Delete button
+    // In add mode, hide Delete button and clear stale handlers
     const delBtn = document.getElementById('delete-command');
-    if (delBtn) delBtn.classList.add('hidden');
+    if (delBtn) {
+      delBtn.classList.add('hidden');
+      delBtn.onclick = null;
+      delBtn.removeAttribute('data-busy');
+    }
     
     ui.showModal('command-modal');
   },
@@ -750,24 +753,38 @@ const ui = {
     form.dataset.layerKey = layerKey;
     form.dataset.commandKey = commandKey;
     form.dataset.mode = 'edit';
-    // In edit mode, show Delete button
+    // In edit mode, show Delete button and bind to this specific command
     const delBtn = document.getElementById('delete-command');
-    if (delBtn) delBtn.classList.remove('hidden');
+    if (delBtn) {
+      delBtn.classList.remove('hidden');
+      delBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (delBtn.dataset.busy === '1') return;
+        delBtn.dataset.busy = '1';
+        try {
+          ui.deleteCommand(layerKey, commandKey);
+          ui.hideModal();
+        } finally {
+          // Small delay to avoid rapid re-trigger from event bubbling
+          setTimeout(() => { delBtn.dataset.busy = '0'; }, 200);
+        }
+      };
+    }
     
     ui.showModal('command-modal');
   },
 
   deleteCommand(layerKey, commandKey) {
-    if (confirm(`Are you sure you want to delete the "${commandKey}" command?`)) {
-      if (appState.config.layers[layerKey]?.commands) {
-        delete appState.config.layers[layerKey].commands[commandKey];
-        utils.markDirty();
-        
-        // Refresh the layer detail view
-        renderer.renderLayerDetail(layerKey);
-        
-        ui.showToast('Command deleted successfully');
-      }
+    // Delete immediately without native confirm
+    if (appState.config.layers[layerKey]?.commands) {
+      delete appState.config.layers[layerKey].commands[commandKey];
+      utils.markDirty();
+      
+      // Refresh the layer detail view
+      renderer.renderLayerDetail(layerKey);
+      
+      ui.showToast('Command deleted successfully');
     }
   },
 
@@ -978,21 +995,7 @@ function setupEventHandlers() {
     cmdTypeSelect.addEventListener('change', (e) => ui.renderCommandConfig('cmd', e.target.value));
   }
 
-  // Command modal: Delete button
-  const deleteBtn = document.getElementById('delete-command');
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      const form = document.getElementById('command-form');
-      if (!form || form.dataset.mode !== 'edit') {
-        ui.showToast('Open an existing command to delete', 'error');
-        return;
-      }
-      const layerKey = form.dataset.layerKey;
-      const commandKey = form.dataset.commandKey;
-      ui.deleteCommand(layerKey, commandKey);
-      ui.hideModal();
-    });
-  }
+  // Delete button binding is attached in ui.editCommand() to ensure correct context
 }
 
 // Initialize the application
