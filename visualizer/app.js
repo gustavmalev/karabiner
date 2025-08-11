@@ -106,13 +106,19 @@ const utils = {
 
 
 // Command helpers for UI <-> config mapping
-function buildCommandFrom(type, text) {
+function buildCommandFrom(type, text, options = {}) {
   const value = String(text || '').trim();
   if (type === 'app' && value) {
     return { to: [{ shell_command: `open -a '${value}.app'` }], description: `Open ${value}` };
   }
   if (type === 'window' && value) {
     return { to: [{ shell_command: `open -g raycast://extensions/raycast/window-management/${value}` }], description: `Window: ${value}` };
+  }
+  if (type === 'raycast' && value) {
+    const ignore = options.ignore === true;
+    const deeplink = value.startsWith('raycast://') ? value : `raycast://${value}`;
+    const prefix = ignore ? '-g ' : '';
+    return { to: [{ shell_command: `open ${prefix}${deeplink}` }], description: `Open ${deeplink}` };
   }
   if (type === 'shell' && value) {
     return { to: [{ shell_command: value }], description: value };
@@ -131,6 +137,12 @@ function parseTypeTextFrom(command) {
     }
     if (sc.startsWith('open -g raycast://extensions/raycast/window-management/')) {
       return { type: 'window', text: sc.split('/').pop() || '' };
+    }
+    // Detect raycast deeplinks via open [ -g ] raycast://...
+    if (/^open\s+(-g\s+)?raycast:\/\//.test(sc)) {
+      const ignore = /^open\s+-g\s+raycast:\/\//.test(sc);
+      const deeplink = sc.replace(/^open\s+(-g\s+)?/, '');
+      return { type: 'raycast', text: deeplink, ignoreRaycast: ignore };
     }
     if (sc) return { type: 'shell', text: sc };
     if (action.key_code) return { type: 'key', text: '' };
@@ -521,7 +533,7 @@ const ui = {
   },
 
   // Toggle between text input and a window-action combobox depending on command type
-  renderCommandConfig(scope, type, value = '') {
+  renderCommandConfig(scope, type, value = '', extras = {}) {
     const isLayer = scope === 'layer';
     const groupEl = document.getElementById(isLayer ? 'command-text-group' : 'cmd-text-group');
     const inputId = isLayer ? 'layer-command-text' : 'cmd-command-text';
@@ -530,6 +542,10 @@ const ui = {
 
     const selectId = isLayer ? 'layer-window-select' : 'cmd-window-select';
     let selectEl = document.getElementById(selectId);
+    const rcIgnoreId = isLayer ? 'layer-raycast-ignore' : 'cmd-raycast-ignore';
+    const rcWrapId = isLayer ? 'layer-raycast-wrap' : 'cmd-raycast-wrap';
+    let rcIgnoreEl = document.getElementById(rcIgnoreId);
+    let rcWrapEl = document.getElementById(rcWrapId);
 
     if (type === 'window') {
       // Ensure a select exists inside the same group as the text input
@@ -560,6 +576,12 @@ const ui = {
         inputEl.remove();
         inputEl = null;
       }
+      // Remove raycast checkbox if present
+      if (rcWrapEl && rcWrapEl.parentNode === groupEl) {
+        rcWrapEl.remove();
+        rcWrapEl = null;
+        rcIgnoreEl = null;
+      }
       // Show the select and set value if provided
       selectEl.classList.remove('hidden');
       if (value) selectEl.value = value;
@@ -570,6 +592,12 @@ const ui = {
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
         selectEl = null;
+      }
+      // Remove raycast checkbox if present
+      if (rcWrapEl && rcWrapEl.parentNode === groupEl) {
+        rcWrapEl.remove();
+        rcWrapEl = null;
+        rcIgnoreEl = null;
       }
       // Create wrapper to position dropdown
       let wrap = groupEl.querySelector('.combo-wrap');
@@ -646,6 +674,52 @@ const ui = {
         if (value) inputEl.value = value;
         render(inputEl.value);
       });
+    } else if (type === 'raycast') {
+      // Remove window select if present
+      if (selectEl && selectEl.parentNode === groupEl) {
+        selectEl.remove();
+        selectEl = null;
+      }
+      // Ensure text input
+      if (!inputEl) {
+        inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.id = inputId;
+        inputEl.placeholder = 'raycast://extensions/...';
+      }
+      // If input wrapped in combo-wrap from app type, unwrap to groupEl safely
+      if (inputEl.parentElement && inputEl.parentElement.classList.contains('combo-wrap')) {
+        const wrap = inputEl.parentElement; // .combo-wrap
+        const parent = wrap.parentElement;  // groupEl
+        if (parent) {
+          parent.insertBefore(inputEl, wrap.nextSibling);
+          wrap.remove();
+        }
+      }
+      if (inputEl.parentNode !== groupEl) {
+        groupEl.appendChild(inputEl);
+      }
+      inputEl.classList.remove('hidden');
+      if (value) inputEl.value = value;
+      // Add/ensure checkbox
+      if (!rcWrapEl) {
+        rcWrapEl = document.createElement('div');
+        rcWrapEl.id = rcWrapId;
+        rcWrapEl.style.display = 'flex';
+        rcWrapEl.style.alignItems = 'center';
+        rcWrapEl.style.marginTop = '0.5rem';
+        rcIgnoreEl = document.createElement('input');
+        rcIgnoreEl.type = 'checkbox';
+        rcIgnoreEl.id = rcIgnoreId;
+        const label = document.createElement('label');
+        label.htmlFor = rcIgnoreId;
+        label.textContent = 'Ignore window (-g)';
+        label.style.marginLeft = '0.5rem';
+        rcWrapEl.appendChild(rcIgnoreEl);
+        rcWrapEl.appendChild(label);
+        groupEl.appendChild(rcWrapEl);
+      }
+      rcIgnoreEl.checked = extras.ignore === true;
     } else {
       if (!inputEl) {
         inputEl = document.createElement('input');
@@ -661,6 +735,10 @@ const ui = {
       inputEl.classList.remove('hidden');
       if (selectEl && selectEl.parentNode === groupEl) {
         selectEl.remove();
+      }
+      // Remove raycast checkbox if present
+      if (rcWrapEl && rcWrapEl.parentNode === groupEl) {
+        rcWrapEl.remove();
       }
     }
   },
@@ -755,12 +833,17 @@ const ui = {
     const commandSection = document.getElementById('command-section');
     const cmdTextGroup = document.getElementById('command-text-group');
     if (layerType === 'command') {
-      const { type, text } = parseTypeTextFrom(layerConfig.command);
+      const parsed = parseTypeTextFrom(layerConfig.command);
+      const { type, text } = parsed;
       document.getElementById('command-type').value = type;
       // Render appropriate config UI and set value
-      ui.renderCommandConfig('layer', type, text);
+      ui.renderCommandConfig('layer', type, text, { ignore: parsed.ignoreRaycast === true });
       if (type !== 'window') {
         document.getElementById('layer-command-text').value = text;
+      }
+      if (type === 'raycast') {
+        const rc = document.getElementById('layer-raycast-ignore');
+        if (rc) rc.checked = parsed.ignoreRaycast === true;
       }
     } else {
       document.getElementById('layer-command-text').value = '';
@@ -839,12 +922,17 @@ const ui = {
     document.getElementById('command-key').innerHTML = `<option value="${commandKey}">${utils.formatKeyLabel(commandKey)} (${commandKey})</option>`;
     document.getElementById('command-key').value = commandKey;
     document.getElementById('command-key').disabled = true;
-    const { type, text } = parseTypeTextFrom(command);
+    const parsed = parseTypeTextFrom(command);
+    const { type, text } = parsed;
     const typeSel = document.getElementById('cmd-type');
     const textInp = document.getElementById('cmd-command-text');
     if (typeSel) typeSel.value = type;
     if (textInp) textInp.value = text;
-    ui.renderCommandConfig('cmd', type, text);
+    ui.renderCommandConfig('cmd', type, text, { ignore: parsed.ignoreRaycast === true });
+    if (type === 'raycast') {
+      const rc = document.getElementById('cmd-raycast-ignore');
+      if (rc) rc.checked = parsed.ignoreRaycast === true;
+    }
     
     // Store data for form submission
     form.dataset.layerKey = layerKey;
@@ -993,6 +1081,7 @@ function setupEventHandlers() {
     const cmdText = (cmdType === 'window')
       ? (document.getElementById('layer-window-select')?.value || '')
       : ((document.getElementById('layer-command-text')?.value || '').trim());
+    const cmdIgnore = (cmdType === 'raycast') ? !!document.getElementById('layer-raycast-ignore')?.checked : false;
     
     if (!layerKey) {
       ui.showToast('Please select a key', 'error');
@@ -1016,7 +1105,7 @@ function setupEventHandlers() {
     if (layerType === 'sublayer') {
       appState.config.layers[layerKey].commands = {};
     } else {
-      appState.config.layers[layerKey].command = buildCommandFrom(cmdType, cmdText);
+      appState.config.layers[layerKey].command = buildCommandFrom(cmdType, cmdText, { ignore: cmdIgnore });
     }
     
     utils.markDirty();
@@ -1040,6 +1129,7 @@ function setupEventHandlers() {
     const cmdText = (cmdType === 'window')
       ? (document.getElementById('cmd-window-select')?.value || '')
       : ((document.getElementById('cmd-command-text')?.value || '').trim());
+    const cmdIgnore = (cmdType === 'raycast') ? !!document.getElementById('cmd-raycast-ignore')?.checked : false;
     
     if (!commandKey) {
       ui.showToast('Please select a key', 'error');
@@ -1061,7 +1151,7 @@ function setupEventHandlers() {
     }
     
     // Create/Update command from type+text
-    appState.config.layers[layerKey].commands[commandKey] = buildCommandFrom(cmdType, cmdText);
+    appState.config.layers[layerKey].commands[commandKey] = buildCommandFrom(cmdType, cmdText, { ignore: cmdIgnore });
     
     utils.markDirty();
     ui.hideModal();
