@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppState } from '../../state/appState';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useStore } from '../../state/store';
+import { selectCurrentLayer } from '../../state/selectors';
 import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
@@ -10,9 +11,10 @@ import { numberRow, topRow, homeRow, bottomRow, labelForKey } from '../../utils/
 type CmdType = 'app' | 'window' | 'raycast' | 'shell' | 'key';
 
 export function LayerDetail() {
-  const { state, dispatch } = useAppState();
-  const key = state.currentLayerKey;
-  const layer = key ? state.config?.layers[key] : null;
+  const config = useStore((s) => s.config);
+  const key = useStore((s) => s.currentLayerKey);
+  const setConfig = useStore((s) => s.setConfig);
+  const layer = useStore(selectCurrentLayer);
   const [showCmdModal, setShowCmdModal] = useState<null | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string }>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -46,26 +48,25 @@ export function LayerDetail() {
 
   const onAddLayer = () => {
     if (!key) return;
+    const prevLayers = (config?.layers || {}) as Record<string, Layer>;
     const newLayers: Record<string, Layer> = {
-      ...(state.config?.layers || {}),
+      ...prevLayers,
       [key]: { type: 'sublayer', commands: {} as Record<string, Command> },
     };
-    dispatch({ type: 'setConfig', config: { ...(state.config || { layers: {} as Record<string, Layer> }), layers: newLayers } });
-    dispatch({ type: 'markDirty' });
+    setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
   };
 
   const onDeleteLayer = () => {
-    if (!key || !state.config) return;
-    const newLayers = { ...state.config.layers };
+    if (!key || !config) return;
+    const newLayers = { ...config.layers };
     delete newLayers[key];
-    dispatch({ type: 'setConfig', config: { ...state.config, layers: newLayers } });
-    dispatch({ type: 'markDirty' });
+    setConfig({ ...config, layers: newLayers });
   };
 
   const onSaveCommand = (values: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => {
     if (!key) return;
     const cmd: Command = buildCommandFrom(values.type, values.text, { ignore: values.ignore });
-    const prev: Record<string, Layer> = (state.config?.layers || {}) as Record<string, Layer>;
+    const prev: Record<string, Layer> = (config?.layers || {}) as Record<string, Layer>;
     const base: Layer = prev[key] || ({ type: 'sublayer', commands: {} as Record<string, Command> } as const);
     const commands = {
       ...((base.type === 'sublayer' ? base.commands : {}) as Record<string, Command>),
@@ -73,23 +74,24 @@ export function LayerDetail() {
     const innerKey = (values.innerKey || values.text?.[0] || 'a').toLowerCase();
     commands[innerKey] = cmd;
     const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
-    dispatch({ type: 'setConfig', config: { ...(state.config || { layers: {} as Record<string, Layer> }), layers: newLayers } });
-    dispatch({ type: 'markDirty' });
+    setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
     setShowCmdModal(null);
   };
 
-  const sublayerCommands = (layer && (layer as any).commands) as Record<string, Command> | undefined;
+  const sublayerCommands: Record<string, Command> | undefined = useMemo(() => {
+    if (!layer || layer.type !== 'sublayer') return undefined;
+    return layer.commands;
+  }, [layer]);
 
   const onDeleteInner = (ik: string) => {
-    if (!key || !state.config || !sublayerCommands) return;
-    const prev: Record<string, Layer> = state.config.layers;
+    if (!key || !config || !sublayerCommands) return;
+    const prev: Record<string, Layer> = config.layers;
     const base = prev[key];
     if (!base || base.type !== 'sublayer') return;
     const commands = { ...base.commands };
     delete commands[ik];
     const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
-    dispatch({ type: 'setConfig', config: { ...state.config, layers: newLayers } });
-    dispatch({ type: 'markDirty' });
+    setConfig({ ...config, layers: newLayers });
   };
 
   return (
@@ -122,7 +124,7 @@ export function LayerDetail() {
         <div
           ref={containerRef}
           className="space-y-3"
-          style={{ ['--key-size' as any]: `${keySize}px`, ['--key-gap' as any]: `${gap}px` }}
+          style={{ ['--key-size']: `${keySize}px`, ['--key-gap']: `${gap}px` } as CSSProperties}
         >
           <div className="text-xs text-default-500">Click a key to add/edit an inner command for this sublayer.</div>
           {rows.map((row, idx) => (
@@ -132,17 +134,23 @@ export function LayerDetail() {
               style={{ gap: 'var(--key-gap)', marginLeft: `calc(var(--key-size) * ${idx * 0.5})` }}
             >
               {row.map((code) => {
-                const existing = !!sublayerCommands?.[code.toLowerCase()];
-                const stateForKey: 'custom' | 'available' = existing ? 'custom' : 'available';
+                const lower = code.toLowerCase();
+                const isBase = key?.toLowerCase() === lower;
+                const existing = !!sublayerCommands?.[lower];
+                const stateForKey: 'locked' | 'custom' | 'available' = isBase ? 'locked' : (existing ? 'custom' : 'available');
                 return (
                   <KeyTile
                     key={code}
-                    code={code.toLowerCase()}
+                    code={lower}
                     state={stateForKey}
-                    onClick={() =>
-                      existing
-                        ? setShowCmdModal({ mode: 'edit', cmdKey: code.toLowerCase() })
-                        : setShowCmdModal({ mode: 'add', prefill: code.toLowerCase() })
+                    onClick={
+                      isBase
+                        ? undefined
+                        : () => (
+                            existing
+                              ? setShowCmdModal({ mode: 'edit', cmdKey: lower })
+                              : setShowCmdModal({ mode: 'add', prefill: lower })
+                          )
                     }
                   />
                 );
@@ -165,7 +173,7 @@ export function LayerDetail() {
             }
             onSaveCommand(v);
           }}
-          takenKeys={Object.keys(sublayerCommands || {})}
+          takenKeys={[...Object.keys(sublayerCommands || {}), ...(key ? [key] : [])]}
           initial={(() => {
             if (!showCmdModal) return undefined;
             if (showCmdModal.mode === 'add') {
@@ -175,7 +183,12 @@ export function LayerDetail() {
               const cmd = sublayerCommands?.[showCmdModal.cmdKey];
               if (!cmd) return undefined;
               const parsed = parseTypeTextFrom(cmd);
-              return { type: parsed.type as CmdType, text: (parsed as any).text || '', ignore: (parsed as any).ignoreRaycast || false, innerKey: showCmdModal.cmdKey };
+              return {
+                type: parsed.type as CmdType,
+                text: parsed.text || '',
+                ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
+                innerKey: showCmdModal.cmdKey,
+              };
             }
             return undefined;
           })()}
@@ -229,8 +242,10 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
   mode: 'add' | 'edit';
   onDelete?: () => void;
 }) {
-  const { state, dispatch } = useAppState();
-  const hasAIKey = !!state.aiKey;
+  const apps = useStore((s) => s.apps);
+  const aiKey = useStore((s) => s.aiKey);
+  const setAIKey = useStore((s) => s.setAIKey);
+  const hasAIKey = !!aiKey;
   const [type, setType] = useState<CmdType>(initial?.type || 'app');
   const [text, setText] = useState(initial?.text || '');
   const [ignore, setIgnore] = useState(!!initial?.ignore);
@@ -259,7 +274,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
       disabled: takenInnerKeys.includes(code.toLowerCase()),
     }));
   }, [allKeyCodes, takenInnerKeys]);
-  const appItems = useMemo(() => state.apps.map(a => ({ id: a.name, label: a.name })), [state.apps]);
+  const appItems = useMemo(() => apps.map(a => ({ id: a.name, label: a.name })), [apps]);
 
   // Simple mnemonic-based suggestion per philosophy
   function suggestInnerKey(): { key: string | null; reason: string } {
@@ -273,10 +288,12 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
     if (type === 'raycast') {
       // Try to parse last path segment of a Raycast deeplink: raycast://extensions/owner/ext/command
       try {
-        const raw = sourceLabel.replace(/^\"|\"$/g, '');
+        const raw = sourceLabel.replace(/^"|"$/g, '');
         const last = raw.split('/').filter(Boolean).pop() || raw;
         sourceLabel = last.replace(/[?#].*$/, '');
-      } catch {}
+      } catch {
+        // ignore parse issues
+      }
     }
     const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const words = slug.split(/\s+/).filter(Boolean);
@@ -367,8 +384,8 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
           <Input
             label="Gemini API key"
             placeholder="Paste your Gemini API key to enable suggestions"
-            value={state.aiKey}
-            onChange={(e) => dispatch({ type: 'setAIKey', aiKey: e.target.value })}
+            value={aiKey}
+            onChange={(e) => setAIKey(e.target.value)}
           />
         )}
         {type === 'raycast' && (
@@ -475,7 +492,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
               variant="solid"
               color="danger"
               onPress={() => {
-                onDelete && onDelete();
+                if (onDelete) onDelete();
                 setConfirmDeleteCmdOpen(false);
               }}
             >

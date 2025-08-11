@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Button, Input, Kbd } from '@heroui/react';
 import { Modal } from '../../components/Modals/Modal';
-import { useAppState } from '../../state/appState';
+import { useStore } from '../../state/store';
 import { zExported } from '../../state/migrations';
 import { diffConfigs } from '../../utils/diff';
+import type { Config } from '../../types';
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -15,9 +16,10 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, dispatch } = useAppState();
+  const storeConfig = useStore((s) => s.config);
+  const setConfig = useStore((s) => s.setConfig);
   const [error, setError] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<{ schemaVersion: number; exportedAt?: string; config: typeof state.config } | null>(null);
+  const [parsed, setParsed] = useState<{ schemaVersion: number; exportedAt?: string; config: Config } | null>(null);
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -36,29 +38,29 @@ export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => 
         try {
           const j = JSON.parse(txt);
           if (typeof j.schemaVersion === 'number' && j.config && typeof j.config === 'object') {
-            setParsed({ schemaVersion: j.schemaVersion, config: j.config });
+            setParsed({ schemaVersion: j.schemaVersion, config: j.config as Config });
             return;
           }
           throw zerr;
-        } catch (e2) {
+        } catch {
           setParsed(null);
           setError('Invalid import file: not a recognized layout JSON.');
         }
       }
-    } catch (e) {
+    } catch {
       setError('Failed to read file');
     }
   }
 
   const summary = useMemo(() => {
     if (!parsed) return null;
-    return diffConfigs(state.config, parsed.config as any);
-  }, [parsed, state.config]);
+    return diffConfigs(storeConfig, parsed.config);
+  }, [parsed, storeConfig]);
 
   function onConfirm() {
     if (!parsed) return;
-    // Apply incoming config and mark dirty via reducer
-    dispatch({ type: 'setConfig', config: parsed.config as any });
+    // Apply incoming config; setConfig marks dirty
+    setConfig(parsed.config);
     onClose();
   }
 

@@ -1,3 +1,6 @@
+/* eslint-disable */
+// DEPRECATED: Legacy React context state. Kept temporarily for reference during migration to Zustand.
+// This file is excluded from TypeScript build (see tsconfig.app.json) and linting is disabled.
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import type { AppInfo, Config, Data, KeyCode } from '../types';
 import { getApps, getConfig, getData } from '../api/client';

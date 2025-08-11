@@ -3,9 +3,9 @@ import { migrateToLatest } from './migrations';
 
 const STORAGE_KEY = 'vrx:persisted';
 
-function debounce<T extends (...args: any[]) => void>(fn: T, wait: number) {
+function debounce<Args extends unknown[]>(fn: (...args: Args) => void, wait: number) {
   let t: number | undefined;
-  return (...args: Parameters<T>) => {
+  return (...args: Args) => {
     if (t) window.clearTimeout(t);
     t = window.setTimeout(() => fn(...args), wait);
   };

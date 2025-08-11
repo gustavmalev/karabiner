@@ -1,5 +1,11 @@
 import type { Command } from '../types';
 
+type Action = {
+  shell_command?: string;
+  key_code?: string;
+  modifiers?: string[];
+};
+
 export function buildCommandFrom(
   type: 'app' | 'window' | 'raycast' | 'shell' | 'key',
   text: string,
@@ -38,8 +44,8 @@ export function parseTypeTextFrom(command?: Command):
   | { type: 'key'; text: string }
   | { type: 'app'; text: string } {
   try {
-    const action = command?.to?.[0] || {};
-    const sc = (action as any).shell_command || '';
+    const action: Action = (command?.to?.[0] as Action) || {};
+    const sc = action.shell_command || '';
     if (sc.startsWith('open -a ')) {
       const m = sc.match(/open -a '(.+)\.app'/);
       return { type: 'app', text: m ? m[1] : '' } as const;
@@ -53,8 +59,10 @@ export function parseTypeTextFrom(command?: Command):
       return { type: 'raycast', text: deeplink, ignoreRaycast: ignore } as const;
     }
     if (sc) return { type: 'shell', text: sc } as const;
-    if ((action as any).key_code) return { type: 'key', text: '' } as const;
-  } catch {}
+    if (action.key_code) return { type: 'key', text: '' } as const;
+  } catch {
+    // ignore parse errors
+  }
   return { type: 'app', text: '' } as const;
 }
 

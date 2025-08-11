@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
-import { useAppState } from '../state/appState';
+import { useStore } from '../state/store';
 import { saveConfig } from '../api/client';
 import { ExportButton } from '../features/export/ExportButton';
 import { ImportDialog } from '../features/import/ImportDialog';
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { state, dispatch } = useAppState();
+  const config = useStore((s) => s.config);
+  const isDirty = useStore((s) => s.isDirty);
+  const markSaved = useStore((s) => s.markSaved);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
+  const historyCount = useStore((s) => s.history.length);
+  const futureCount = useStore((s) => s.future.length);
   const [importOpen, setImportOpen] = useState(false);
 
   async function onSave() {
-    if (!state.config) return;
+    if (!config) return;
     try {
-      await saveConfig(state.config);
-      dispatch({ type: 'markSaved' });
+      await saveConfig(config);
+      markSaved();
     } catch (e) {
       console.error('Failed to save config', e);
       // TODO: add toast later
@@ -27,6 +33,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-base font-semibold">Visualizer</h1>
         </NavbarBrand>
         <NavbarContent justify="end" className="gap-2">
+          <Tooltip content="Undo (Cmd/Ctrl+Z)" placement="bottom">
+            <div className="inline-block">
+              <Button size="sm" variant="flat" onPress={() => undo()} isDisabled={!historyCount}>
+                Undo {historyCount ? `(${historyCount})` : ''}
+              </Button>
+            </div>
+          </Tooltip>
+          <Tooltip content="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)" placement="bottom">
+            <div className="inline-block">
+              <Button size="sm" variant="flat" onPress={() => redo()} isDisabled={!futureCount}>
+                Redo {futureCount ? `(${futureCount})` : ''}
+              </Button>
+            </div>
+          </Tooltip>
           <Tooltip content="Import layout JSON" placement="bottom">
             <div className="inline-block">
               <Button variant="flat" onPress={() => setImportOpen(true)}>Import</Button>
@@ -35,7 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <ExportButton />
           <Tooltip content="Save changes" placement="bottom">
             <div className="inline-block">
-              <Button variant="solid" color="primary" isDisabled={!state.isDirty} onPress={onSave}>
+              <Button variant="solid" color="primary" isDisabled={!isDirty} onPress={onSave}>
                 Save
               </Button>
             </div>

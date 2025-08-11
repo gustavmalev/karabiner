@@ -1,16 +1,17 @@
-import type { Filter } from '../state/appState';
-import { useAppState } from '../state/appState';
+import type { Filter } from '../state/types';
+import { useStore } from '../state/store';
 import { Tabs, Tab } from '@heroui/react';
 
 const filters: Filter[] = ['all', 'available', 'sublayer', 'custom', 'thirdparty'];
 
 export function FilterBar() {
-  const { state, dispatch } = useAppState();
+  const filter = useStore((s) => s.filter);
+  const setFilter = useStore((s) => s.setFilter);
   return (
     <Tabs
       aria-label="Filters"
-      selectedKey={state.filter}
-      onSelectionChange={(key) => dispatch({ type: 'setFilter', filter: String(key) as Filter })}
+      selectedKey={filter}
+      onSelectionChange={(key) => setFilter(String(key) as Filter)}
       variant="underlined"
       color="primary"
       size="sm"

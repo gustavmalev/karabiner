@@ -21,7 +21,7 @@ export function diffConfigs(current: Config | null | undefined, incoming: Config
   const layersRemoved = [...aLayers].filter((k) => !bLayers.has(k));
   const common = [...aLayers].filter((k) => bLayers.has(k));
 
-  let layersChanged: string[] = [];
+  const layersChanged: string[] = [];
   let commandsAdded = 0;
   let commandsRemoved = 0;
   let commandsChanged = 0;

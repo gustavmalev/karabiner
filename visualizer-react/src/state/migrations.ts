@@ -3,17 +3,17 @@ import { SCHEMA_VERSION, zPersisted, type Persisted } from './schema';
 
 // Map of migration steps from version n -> n+1
 // Each function must be a pure transformation and safe to run exactly once.
-const migrations: Record<number, (input: any) => any> = {
+const migrations: Record<number, (input: Record<string, unknown>) => Record<string, unknown>> = {
   // 0 -> 1 example (placeholder). If we ever had version 0, we'd transform to 1.
   // 0: (s) => ({ ...s, schemaVersion: 1 }),
 };
 
 export function migrateToLatest(raw: unknown): Persisted {
   // We accept an object with a schemaVersion field (number) and progressively migrate.
-  const base = (typeof raw === 'object' && raw !== null ? (raw as any) : {}) as { schemaVersion?: number };
-  const from = typeof base.schemaVersion === 'number' ? base.schemaVersion : SCHEMA_VERSION;
+  const base: Record<string, unknown> = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const from = typeof base.schemaVersion === 'number' ? (base.schemaVersion as number) : SCHEMA_VERSION;
 
-  let current: any = { ...base };
+  let current: Record<string, unknown> = { ...base };
   for (let v = from; v < SCHEMA_VERSION; v++) {
     const step = migrations[v];
     if (!step) throw new Error(`Missing migration step for ${v} -> ${v + 1}`);
@@ -21,7 +21,7 @@ export function migrateToLatest(raw: unknown): Persisted {
   }
 
   // Ensure final schemaVersion matches latest
-  if (current.schemaVersion !== SCHEMA_VERSION) current.schemaVersion = SCHEMA_VERSION;
+  if (current.schemaVersion !== SCHEMA_VERSION) (current as Record<string, unknown>).schemaVersion = SCHEMA_VERSION;
 
   // Validate using zod and narrow the type
   const parsed = zPersisted.safeParse(current);
