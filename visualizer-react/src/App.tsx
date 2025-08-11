@@ -4,14 +4,12 @@ import { Card, CardBody } from '@heroui/react'
 import { KeyboardGrid } from './components/KeyboardGrid/KeyboardGrid'
 import { LayerDetail } from './components/LayerDetail/LayerDetail'
 import { useStore } from './state/store'
-import { saveConfig } from './api/client'
+ 
 
 function App() {
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
-  const config = useStore((s) => s.config)
   const isDirty = useStore((s) => s.isDirty)
-  const markSaved = useStore((s) => s.markSaved)
   const revertToSaved = useStore((s) => s.revertToSaved)
   const openImportDialog = useStore((s) => s.openImportDialog)
 
@@ -31,14 +29,6 @@ function App() {
         redo()
         return
       }
-      // Save
-      if (isMeta && key === 's') {
-        e.preventDefault()
-        if (config) {
-          void saveConfig(config).then(() => markSaved()).catch(() => {})
-        }
-        return
-      }
       // Import dialog
       if (isMeta && e.shiftKey && key === 'i') {
         e.preventDefault()
@@ -54,7 +44,7 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo, config, markSaved, openImportDialog, isDirty, revertToSaved])
+  }, [undo, redo, openImportDialog, isDirty, revertToSaved])
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
