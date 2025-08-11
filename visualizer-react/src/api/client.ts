@@ -26,11 +26,3 @@ export async function getApps(): Promise<AppInfo[]> {
   return json(await fetch('/api/apps'));
 }
 
-export async function getScreenTime(): Promise<unknown> {
-  return json(await fetch('/api/screentime'));
-}
-
-export async function suggestInnerKey(): Promise<{ letter: string }> {
-  // TODO: wire to your server endpoint
-  return { letter: 'a' };
-}

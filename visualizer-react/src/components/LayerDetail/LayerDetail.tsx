@@ -777,10 +777,15 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
         ) : type === 'window' ? (
           <Autocomplete
             label="Window"
+            labelPlacement="outside"
             placeholder="Search window actions"
             defaultItems={windowCommandItems}
             allowsCustomValue={false}
             radius="sm"
+            size="lg"
+            isVirtualized
+            itemHeight={36}
+            maxListboxHeight={320}
             isClearable={false}
             inputValue={windowQuery}
             onInputChange={(val) => setWindowQuery(val || '')}
@@ -803,13 +808,16 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
               offset: 8,
               classNames: {
                 base: 'rounded-medium',
-                content: 'p-1 border-0 bg-background',
+                content: 'p-1.5 border-0 bg-background',
               },
             }}
             listboxProps={{
               hideSelectedIcon: true,
+              topContent: (
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-default-500">Window actions</div>
+              ),
               itemClasses: {
-                base: 'rounded-small outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-none text-default-500 transition-opacity data-[hover=true]:text-foreground data-[hover=true]:bg-default-100 data-[focus=true]:bg-default-100 data-[selected=true]:bg-default-200 data-[focus-visible=true]:outline-none data-[focus-visible=true]:ring-0',
+                base: 'rounded-small outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-none text-default-500 transition-opacity px-2 py-1.5 data-[hover=true]:text-foreground data-[hover=true]:bg-default-100 data-[focus=true]:bg-default-100 data-[selected=true]:bg-default-200 data-[focus-visible=true]:outline-none data-[focus-visible=true]:ring-0',
                 wrapper: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-transparent',
                 selectedIcon: 'hidden',
               },
@@ -870,6 +878,9 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
               allowsCustomValue={false}
               radius="sm"
               size="lg"
+              isVirtualized
+              itemHeight={36}
+              maxListboxHeight={320}
               isClearable={false}
               inputValue={innerKey}
               onInputChange={(val) => setInnerKey((val || '').toLowerCase())}

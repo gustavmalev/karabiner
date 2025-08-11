@@ -10,43 +10,7 @@ import { serveStatic } from './static.mjs';
 
 const PROJECT_ROOT = path.resolve(VISUALIZER_DIR, '..');
 
-// Best-effort: query macOS KnowledgeC (Screen Time) DB for most used apps by bundle
-async function getScreenTimeTopApps(days = 7, limit = 15) {
-  const dbPath = path.join(os.homedir(), 'Library', 'Application Support', 'Knowledge', 'knowledgeC.db');
-  const exists = fs.existsSync(dbPath);
-  if (!exists) return { apps: [], note: 'Screen Time DB not accessible' };
-
-  const sinceSeconds = Math.floor((Date.now() - days * 24 * 3600 * 1000) / 1000);
-  // Query adapted to count app in-foreground events. This may require Full Disk Access.
-  const sql = `
-    SELECT
-      ZSTRUCTUREDMETADATA.ZBUNDLEID as bundle,
-      COUNT(*) as cnt
-    FROM ZOBJECT
-    JOIN ZSTRUCTUREDMETADATA ON ZOBJECT.ZSTRUCTUREDMETADATA = ZSTRUCTUREDMETADATA.Z_PK
-    WHERE ZSTREAMNAME = 'com.apple.mobiletimer.app.in.foreground'
-       OR ZSTREAMNAME = 'com.apple.runningboard.assertions'
-       OR ZSTREAMNAME = 'com.apple.appusage.ApplicationUsage'
-    AND ZOBJECT.ZSTARTDATE > ${sinceSeconds}
-    GROUP BY bundle
-    ORDER BY cnt DESC
-    LIMIT ${limit};`;
-
-  return new Promise((resolve) => {
-    exec(`sqlite3 ${JSON.stringify(dbPath)} ${JSON.stringify(sql)}`, (err, stdout) => {
-      if (err) {
-        resolve({ apps: [], note: 'Permission required or query failed' });
-        return;
-      }
-      const lines = String(stdout || '').trim().split('\n').filter(Boolean);
-      const apps = lines.map(line => {
-        const [bundle, cnt] = line.split('|');
-        return { bundle: bundle || '', count: Number(cnt || 0) };
-      }).filter(a => a.bundle);
-      resolve({ apps });
-    });
-  });
-}
+// (Removed) getScreenTimeTopApps helper — unused
 
 // Utility: list installed apps by scanning standard folders
 async function listInstalledApps() {
@@ -232,16 +196,7 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Standalone handler for screentime (outside header block for consistency)
-    if (url.pathname === '/api/screentime' && req.method === 'GET') {
-      try {
-        const top = await getScreenTimeTopApps();
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(top));
-      } catch (e) {
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ apps: [], note: 'Unavailable' }));
-      }
-      return;
-    }
+    // (Removed) /api/screentime endpoint — unused
     }
 
     if (url.pathname === '/api/data') {
