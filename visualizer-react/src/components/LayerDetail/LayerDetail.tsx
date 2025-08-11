@@ -7,6 +7,7 @@ import { Modal } from '../Modals/Modal';
 import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip } from '@heroui/react';
 import { KeyTile } from '../KeyboardGrid/KeyTile';
 import { numberRow, topRow, homeRow, bottomRow, labelForKey } from '../../utils/keys';
+import { windowCommandItems } from '../../data/windowCommands';
 
 type CmdType = 'app' | 'window' | 'raycast' | 'shell' | 'key';
 
@@ -255,8 +256,8 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
   const [aiRationale, setAiRationale] = useState<string>('');
   const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
-  const disabledTypes = new Set<CmdType>(['shell', 'key', 'window']);
-  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon', window: 'Coming soon' };
+  const disabledTypes = new Set<CmdType>(['shell', 'key']);
+  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon' };
   const isAIMode = mode === 'add' && !initial?.innerKey; // Only the Add-with-AI path shows suggestion UI
 
   // Build full key list and mark taken ones as disabled
@@ -275,6 +276,19 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
     }));
   }, [allKeyCodes, takenInnerKeys]);
   const appItems = useMemo(() => apps.map(a => ({ id: a.name, label: a.name })), [apps]);
+
+  // Window command helpers
+  const [windowQuery, setWindowQuery] = useState<string>('');
+  const getWindowLabel = (slug: string): string => {
+    const f = windowCommandItems.find(i => i.id === slug);
+    if (f) return f.label;
+    return slug ? slug.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : '';
+  };
+  useEffect(() => {
+    if (type === 'window') {
+      setWindowQuery(getWindowLabel(text));
+    }
+  }, [type, text]);
 
   // Simple mnemonic-based suggestion per philosophy
   function suggestInnerKey(): { key: string | null; reason: string } {
@@ -370,6 +384,27 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
             inputValue={text}
             onInputChange={(val) => setText((val || '').trimStart())}
             onSelectionChange={(key) => setText(String(key || ''))}
+          >
+            {(item) => (
+              <AutocompleteItem key={item.id}>
+                {item.label}
+              </AutocompleteItem>
+            )}
+          </Autocomplete>
+        ) : type === 'window' ? (
+          <Autocomplete
+            label="Window"
+            placeholder="Search window actions"
+            defaultItems={windowCommandItems}
+            allowsCustomValue={false}
+            inputValue={windowQuery}
+            onInputChange={(val) => setWindowQuery(val || '')}
+            onSelectionChange={(key) => {
+              const id = String(key || '');
+              const label = windowCommandItems.find(i => i.id === id)?.label || getWindowLabel(id);
+              setText(id);
+              setWindowQuery(label);
+            }}
           >
             {(item) => (
               <AutocompleteItem key={item.id}>
