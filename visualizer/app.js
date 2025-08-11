@@ -217,6 +217,17 @@ const api = {
     return await res.json();
   },
 
+  async fetchScreenTime() {
+    try {
+      const res = await fetch('/api/screentime');
+      if (!res.ok) throw new Error('Failed to load Screen Time');
+      return await res.json(); // { apps: [{ bundle, count }], note? }
+    } catch (e) {
+      console.warn('fetchScreenTime failed', e);
+      return { apps: [], note: 'Unavailable' };
+    }
+  },
+
   async fetchConfig() {
     const res = await fetch('/api/config');
     if (!res.ok) throw new Error('Failed to load configuration');
@@ -523,6 +534,77 @@ const ui = {
     }, 2000);
   },
 
+  // Screen Time suggestions modal
+  ensureScreenTimeModal() {
+    let modal = document.getElementById('screentime-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'screentime-modal';
+    modal.className = 'modal hidden';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="screentime-title">Most Used Apps</h3>
+          <button class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="screentime-note" class="muted" style="margin-bottom:8px;"></div>
+          <ul id="screentime-list" class="cmd-list"></ul>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // wire close
+    modal.querySelector('.modal-close')?.addEventListener('click', () => this.hideModal());
+    return modal;
+  },
+
+  async scanScreenTime() {
+    try {
+      this.showToast('Scanning Screen Time…');
+      const result = await api.fetchScreenTime();
+      const items = Array.isArray(result?.apps) ? result.apps : [];
+      try { localStorage.setItem('screentime_suggestions', JSON.stringify(items)); } catch {}
+
+      const modal = this.ensureScreenTimeModal();
+      const list = modal.querySelector('#screentime-list');
+      const note = modal.querySelector('#screentime-note');
+      if (note) note.textContent = result?.note ? String(result.note) : '';
+      if (list) {
+        list.innerHTML = '';
+        if (!items.length) {
+          const li = document.createElement('li');
+          li.className = 'empty-state';
+          li.textContent = 'No usage data available. You may need to grant Terminal Full Disk Access.';
+          list.appendChild(li);
+        } else {
+          items.slice(0, 20).forEach(app => {
+            const li = document.createElement('li');
+            li.className = 'command-item';
+            li.innerHTML = `
+              <div class="command-info">
+                <div class="command-key">${utils.escapeHtml(app.bundle || 'Unknown')}</div>
+                <div class="command-desc">Opens count: ${Number(app.count || 0)}</div>
+              </div>
+              <div class="command-actions">
+                <button class="btn-small" data-bundle="${utils.escapeHtml(app.bundle || '')}">Copy Bundle ID</button>
+              </div>`;
+            li.querySelector('button')?.addEventListener('click', (ev) => {
+              const bundle = ev.currentTarget?.getAttribute('data-bundle') || '';
+              if (!bundle) return;
+              navigator.clipboard?.writeText(bundle);
+              this.showToast('Copied bundle id');
+            });
+            list.appendChild(li);
+          });
+        }
+      }
+      this.showModal('screentime-modal');
+    } catch (e) {
+      console.warn('scanScreenTime failed', e);
+      this.showToast('Screen Time scan failed', 'error');
+    }
+  },
+
   // Render action buttons inside the Base panel
   renderActions() {
     const container = document.getElementById('base-actions');
@@ -538,6 +620,15 @@ const ui = {
       saveBtn.addEventListener('click', () => this.saveConfiguration());
       container.appendChild(saveBtn);
     }
+
+    // Screen Time scan button
+    const scanBtn = document.createElement('button');
+    scanBtn.id = 'scan-screentime';
+    scanBtn.className = 'btn-secondary';
+    scanBtn.textContent = 'Scan Screen Time';
+    scanBtn.title = 'Find your most used apps';
+    scanBtn.addEventListener('click', () => this.scanScreenTime());
+    container.appendChild(scanBtn);
 
     // Removed: Add Layer button. Adding happens by clicking keys.
 
