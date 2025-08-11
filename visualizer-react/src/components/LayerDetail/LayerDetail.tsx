@@ -14,6 +14,7 @@ export function LayerDetail() {
   const key = state.currentLayerKey;
   const layer = key ? state.config?.layers[key] : null;
   const [showCmdModal, setShowCmdModal] = useState<null | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string }>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // sizing based on container
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -109,7 +110,7 @@ export function LayerDetail() {
                 <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
               </Tooltip>
               <Tooltip content="Delete this sublayer" placement="left">
-                <Button size="sm" variant="solid" color="danger" onPress={onDeleteLayer}>Delete Layer</Button>
+                <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Layer</Button>
               </Tooltip>
             </div>
           )}
@@ -180,6 +181,34 @@ export function LayerDetail() {
           })()}
           mode={showCmdModal?.mode || 'add'}
         />
+      </Modal>
+
+      {/* Confirm delete layer */}
+      <Modal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        isDismissable={false}
+        isKeyboardDismissDisabled={true}
+        hideCloseButton
+        size="sm"
+      >
+        <div className="space-y-4">
+          <h3 className="text-base font-semibold">Delete Layer?</h3>
+          <p className="text-sm text-default-600">This will remove the entire sublayer and all its inner commands for key <span className="font-semibold">{key}</span>. This action cannot be undone.</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button variant="solid" color="default" className="text-black" onPress={() => setConfirmDeleteOpen(false)} autoFocus>Cancel</Button>
+            <Button
+              variant="solid"
+              color="danger"
+              onPress={() => {
+                onDeleteLayer();
+                setConfirmDeleteOpen(false);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
       </Modal>
       </CardBody>
     </Card>
