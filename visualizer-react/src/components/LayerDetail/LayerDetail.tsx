@@ -256,8 +256,8 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
   const [aiRationale, setAiRationale] = useState<string>('');
   const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
-  const disabledTypes = new Set<CmdType>(['shell', 'key']);
-  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon' };
+  const disabledTypes = new Set<CmdType>(['shell']);
+  const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon' };
   const isAIMode = mode === 'add' && !initial?.innerKey; // Only the Add-with-AI path shows suggestion UI
 
   // Build full key list and mark taken ones as disabled
@@ -289,6 +289,75 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
       setWindowQuery(getWindowLabel(text));
     }
   }, [type, text]);
+
+  // Key recording helpers
+  type KeyPress = { key_code?: string; modifiers?: string[] };
+  const [isRecording, setIsRecording] = useState(false);
+  const [keyPress, setKeyPress] = useState<KeyPress>({});
+  const modifierLabels: Record<string, string> = {
+    left_command: 'cmd', right_command: 'cmd',
+    left_option: 'opt', right_option: 'opt',
+    left_control: 'ctrl', right_control: 'ctrl',
+    left_shift: 'shift', right_shift: 'shift',
+    fn: 'fn',
+  };
+  const eventToKarabiner = (e: KeyboardEvent): KeyPress => {
+    const mods: string[] = [];
+    if (e.metaKey) mods.push('left_command');
+    if (e.altKey) mods.push('left_option');
+    if (e.ctrlKey) mods.push('left_control');
+    if (e.shiftKey) mods.push('left_shift');
+    // try to detect fn? not available from KeyboardEvent reliably
+    const code = e.code;
+    const map: Record<string, string> = {
+      ArrowLeft: 'left_arrow', ArrowRight: 'right_arrow', ArrowUp: 'up_arrow', ArrowDown: 'down_arrow',
+      Escape: 'escape', Enter: 'return_or_enter', Backspace: 'delete_or_backspace', Delete: 'delete_forward',
+      Tab: 'tab', Space: 'spacebar', Minus: 'hyphen', Equal: 'equal_sign',
+      BracketLeft: 'open_bracket', BracketRight: 'close_bracket', Backslash: 'backslash',
+      Semicolon: 'semicolon', Quote: 'quote', Backquote: 'grave_accent_and_tilde',
+      Comma: 'comma', Period: 'period', Slash: 'slash',
+    };
+    let key_code = map[code];
+    if (!key_code) {
+      if (/^Key[A-Z]$/.test(code)) key_code = code.slice(3).toLowerCase();
+      else if (/^Digit[0-9]$/.test(code)) key_code = code.slice(5);
+      else if (/^F[0-9]{1,2}$/.test(code)) key_code = code.toLowerCase();
+    }
+    return { key_code, modifiers: mods };
+  };
+  const isModifierOnly = (e: KeyboardEvent) => ['ShiftLeft','ShiftRight','AltLeft','AltRight','MetaLeft','MetaRight','ControlLeft','ControlRight'].includes(e.code);
+  useEffect(() => {
+    if (!isRecording) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isModifierOnly(e)) return; // wait for a non-modifier key
+      const kp = eventToKarabiner(e);
+      if (kp.key_code) {
+        setKeyPress(kp);
+        setText(JSON.stringify(kp));
+        setIsRecording(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [isRecording]);
+  useEffect(() => {
+    if (type === 'key') {
+      try {
+        const parsed = text ? JSON.parse(text) as KeyPress : {};
+        setKeyPress(parsed || {});
+      } catch {
+        // ignore
+      }
+    }
+  }, [type, text]);
+  const recordedLabel = useMemo(() => {
+    const mods = (keyPress.modifiers || []).map(m => modifierLabels[m] || m);
+    const base = keyPress.key_code ? labelForKey(keyPress.key_code) : '';
+    return [...mods.map(m => m.toUpperCase()), base].filter(Boolean).join(' + ');
+  }, [keyPress]);
+  const canSave = type !== 'key' || !!keyPress.key_code;
 
   // Simple mnemonic-based suggestion per philosophy
   function suggestInnerKey(): { key: string | null; reason: string } {
@@ -413,7 +482,22 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
             )}
           </Autocomplete>
         ) : (
-          <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+          type !== 'key' && (
+            <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+          )
+        )}
+        {type === 'key' && (
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="solid" color={isRecording ? 'danger' : 'secondary'} onPress={() => setIsRecording(r => !r)}>
+              {isRecording ? 'Stop' : 'Record'}
+            </Button>
+            <div className="text-sm text-default-600 min-h-6">
+              {recordedLabel || (isRecording ? 'Press a key combo…' : 'No key captured')}
+            </div>
+            {keyPress.key_code && (
+              <Button size="sm" variant="flat" onPress={() => { setKeyPress({}); setText(''); }}>Clear</Button>
+            )}
+          </div>
         )}
         {!hasAIKey && isAIMode && (
           <Input
@@ -472,11 +556,11 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
         )}
         {!isAIMode ? (
           <Tooltip content="Save command" placement="top">
-            <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
+            <Button variant="solid" color="primary" isDisabled={!canSave} onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
           </Tooltip>
         ) : aiSuggestedKey ? (
           <Tooltip content="Save command" placement="top">
-            <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey: aiSuggestedKey })}>Save</Button>
+            <Button variant="solid" color="primary" isDisabled={!canSave} onPress={() => onSave({ type, text, ignore, innerKey: aiSuggestedKey })}>Save</Button>
           </Tooltip>
         ) : (
           <Tooltip content={hasAIKey ? 'Suggest an inner key' : 'Add your Gemini API key to enable suggestions'} placement="top">

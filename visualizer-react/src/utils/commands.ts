@@ -31,6 +31,16 @@ export function buildCommandFrom(
     return { to: [{ shell_command: value }], description: value };
   }
   if (type === 'key') {
+    // Expect JSON: { key_code: string; modifiers?: string[] }
+    try {
+      const parsed = value ? JSON.parse(value) as { key_code?: string; modifiers?: string[] } : {};
+      if (parsed && parsed.key_code) {
+        return { to: [{ key_code: parsed.key_code, modifiers: parsed.modifiers || [] }], description: 'Keypress' };
+      }
+    } catch {
+      // fall through to default
+    }
+    // Fallback (no capture yet)
     return { to: [{ key_code: 'escape' }], description: 'Keypress' };
   }
   return { to: [{ key_code: 'escape' }], description: value || 'Custom command' };
@@ -59,7 +69,7 @@ export function parseTypeTextFrom(command?: Command):
       return { type: 'raycast', text: deeplink, ignoreRaycast: ignore } as const;
     }
     if (sc) return { type: 'shell', text: sc } as const;
-    if (action.key_code) return { type: 'key', text: '' } as const;
+    if (action.key_code) return { type: 'key', text: JSON.stringify({ key_code: action.key_code, modifiers: action.modifiers || [] }) } as const;
   } catch {
     // ignore parse errors
   }
