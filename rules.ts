@@ -41,17 +41,6 @@ const rules: KarabinerRules[] = [
     ],
   },
   ...createHyperSubLayers({
-    1: {
-      1: app('Comet'),
-      9: window('left-half'),
-      w: window('center')
-    },
-    2: {
-      2: window('center-half'),
-      5: window('bottom-third')
-    },
-    5: {
-    },
     h: { to: [{ key_code: 'left_arrow', modifiers: [] }] },
     j: { to: [{ key_code: 'down_arrow', modifiers: [] }] },
     k: { to: [{ key_code: 'up_arrow', modifiers: [] }] },
@@ -91,7 +80,8 @@ const rules: KarabinerRules[] = [
       m: app('Messages'),
       s: app('Spotify'),
       e: app('Mail'),
-      p: app('Passwords')
+      p: app('Passwords'),
+      grave_accent_and_tilde: app('Books')
     },
     r: {
       e: open('raycast://extensions/raycast/emoji-symbols/search-emoji-symbols'),
@@ -99,7 +89,17 @@ const rules: KarabinerRules[] = [
       s: open('-g raycast://extensions/raycast/file-search/search-files'),
       k: open('raycast://extensions/raycast/calendar/my-schedule'),
       n: open('-g raycast://extensions/raycast/raycast-notes/raycast-notes'),
-      o: open('-g raycast://extensions/huzef44/screenocr/recognize-text')
+      o: open('-g raycast://extensions/huzef44/screenocr/recognize-text'),
+      grave_accent_and_tilde: app('Dia')
+    },
+    y: {
+    },
+    t: {
+    },
+    q: {
+    },
+    p: {
+      j: { to: [{ key_code: 'delete_or_backspace', modifiers: ['left_control'] }], description: 'Keypress' }
     }
   }),
 ];

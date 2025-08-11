@@ -699,29 +699,78 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
         {type === 'app' ? (
           <Autocomplete
             label="App"
+            labelPlacement="outside"
             placeholder="Search installed apps"
             defaultItems={appItems}
             allowsCustomValue
+            radius="sm"
+            size="lg"
+            isVirtualized
+            itemHeight={56}
+            maxListboxHeight={320}
+            isClearable={false}
             inputValue={text}
             onInputChange={(val) => setText((val || '').trimStart())}
-            onSelectionChange={(key) => setText(String(key || ''))}
+            onSelectionChange={(key) => {
+              const id = String(key || '');
+              const label = appItems.find(i => i.id === id)?.label || id;
+              setText(label);
+            }}
+            // Show icon of the selected app inside the input
+            startContent={(apps.find(a => a.name.toLowerCase() === (text || '').toLowerCase())?.iconUrl) ? (
+              <span className="inline-flex h-5 w-5 items-center justify-center shrink-0">
+                <Avatar src={apps.find(a => a.name.toLowerCase() === (text || '').toLowerCase())!.iconUrl} radius="sm" className="h-5 w-5" />
+              </span>
+            ) : null}
+            // Remove white focus ring/border on highlighted items and popover
+            classNames={{
+              base: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0',
+              listbox: 'outline-none',
+              listboxWrapper: 'outline-none ring-0 border-0',
+              popoverContent: 'outline-none border-0 ring-0',
+              endContentWrapper: 'hidden',
+              clearButton: 'hidden',
+              selectorButton: 'hidden',
+            }}
+            popoverProps={{
+              offset: 8,
+              classNames: {
+                base: 'rounded-medium',
+                content: 'p-1.5 border-0 bg-background',
+              },
+            }}
+            listboxProps={{
+              hideSelectedIcon: true,
+              topContent: (
+                <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-default-500">Apps</div>
+              ),
+              itemClasses: {
+                base: 'rounded-small outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-none text-default-500 transition-opacity px-2 py-1.5 data-[hover=true]:text-foreground data-[hover=true]:bg-default-100 data-[focus=true]:bg-default-100 data-[selected=true]:bg-default-200 data-[focus-visible=true]:outline-none data-[focus-visible=true]:ring-0',
+                wrapper: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-transparent',
+                selectedIcon: 'hidden',
+              },
+            }}
           >
             {(item) => (
-              <AutocompleteItem
-                key={item.id}
-                textValue={item.label}
-                startContent={
-                  item.iconUrl ? (
-                    <Avatar src={item.iconUrl} radius="sm" className="w-4 h-4" />
-                  ) : (
-                    <div className="w-4 h-4 rounded-sm bg-default-200" />
-                  )
-                }
-                endContent={item.categoryLabel ? (
-                  <span className="text-tiny text-default-400">{item.categoryLabel}</span>
-                ) : null}
-              >
-                {item.label}
+              <AutocompleteItem key={item.id} textValue={item.label}>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5 min-h-[44px]">
+                    <Avatar
+                      src={item.iconUrl}
+                      name={item.label}
+                      size="sm"
+                      radius="sm"
+                      className="shrink-0 bg-transparent overflow-hidden h-5 w-5"
+                      imgProps={{ loading: 'lazy', decoding: 'async' }}
+                    />
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-small text-default-800">{item.label}</span>
+                      {item.categoryLabel ? (
+                        <span className="text-tiny text-default-400">{item.categoryLabel}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
               </AutocompleteItem>
             )}
           </Autocomplete>
@@ -731,6 +780,8 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
             placeholder="Search window actions"
             defaultItems={windowCommandItems}
             allowsCustomValue={false}
+            radius="sm"
+            isClearable={false}
             inputValue={windowQuery}
             onInputChange={(val) => setWindowQuery(val || '')}
             onSelectionChange={(key) => {
@@ -738,6 +789,30 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
               const label = windowCommandItems.find(i => i.id === id)?.label || getWindowLabel(id);
               setText(id);
               setWindowQuery(label);
+            }}
+            classNames={{
+              base: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 [&_[data-slot=inner-wrapper]]:!items-center [&_[data-slot=inner-wrapper]]:gap-1',
+              listbox: 'outline-none',
+              listboxWrapper: 'outline-none ring-0 border-0',
+              popoverContent: 'outline-none border-0 ring-0',
+              endContentWrapper: 'hidden',
+              clearButton: 'hidden',
+              selectorButton: 'hidden',
+            }}
+            popoverProps={{
+              offset: 8,
+              classNames: {
+                base: 'rounded-medium',
+                content: 'p-1 border-0 bg-background',
+              },
+            }}
+            listboxProps={{
+              hideSelectedIcon: true,
+              itemClasses: {
+                base: 'rounded-small outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-none text-default-500 transition-opacity data-[hover=true]:text-foreground data-[hover=true]:bg-default-100 data-[focus=true]:bg-default-100 data-[selected=true]:bg-default-200 data-[focus-visible=true]:outline-none data-[focus-visible=true]:ring-0',
+                wrapper: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-transparent',
+                selectedIcon: 'hidden',
+              },
             }}
           >
             {(item) => (
@@ -789,12 +864,45 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isK
           !isAIMode ? (
             <Autocomplete
               label="Inner key"
+              labelPlacement="outside"
               placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
               defaultItems={keyOptions}
               allowsCustomValue={false}
+              radius="sm"
+              size="lg"
+              isClearable={false}
               inputValue={innerKey}
               onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
               onSelectionChange={(key) => setInnerKey(String(key || ''))}
+              classNames={{
+                base: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0',
+                listbox: 'outline-none',
+                listboxWrapper: 'outline-none ring-0 border-0',
+                popoverContent: 'outline-none border-0 ring-0',
+                endContentWrapper: 'hidden',
+                clearButton: 'hidden',
+                selectorButton: 'hidden',
+              }}
+              popoverProps={{
+                offset: 8,
+                classNames: {
+                  base: 'rounded-medium',
+                  content: 'p-1 border-0 bg-background',
+                },
+              }}
+              listboxProps={{
+                topContent: (
+                  <div className="px-2 py-1 text-[11px] leading-none text-default-500">
+                    Keys
+                  </div>
+                ),
+                hideSelectedIcon: true,
+                itemClasses: {
+                  base: 'rounded-small outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-none px-2.5 py-1.5 data-[hover=true]:bg-default-100 data-[focus=true]:bg-default-100 data-[selected=true]:bg-default-200 data-[focus-visible=true]:outline-none data-[focus-visible=true]:ring-0',
+                  wrapper: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 border-transparent',
+                  selectedIcon: 'hidden',
+                },
+              }}
             >
               {(item) => (
                 <AutocompleteItem
