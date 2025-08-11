@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, Listbox, ListboxItem } from '@heroui/react';
 import { Modal } from '../Modals/Modal';
 import { useStore } from '../../state/store';
+import { SnapshotDiff } from './SnapshotDiff';
 
 function timeAgo(ts: number): string {
   const diff = Math.max(0, Date.now() - ts);
@@ -16,10 +17,13 @@ function timeAgo(ts: number): string {
 
 export function SnapshotsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const snapshots = useStore((s) => s.snapshots);
+  const current = useStore((s) => s.config);
   const revertToSnapshot = useStore((s) => s.revertToSnapshot);
   const deleteSnapshot = useStore((s) => s.deleteSnapshot);
 
   const list = useMemo(() => [...snapshots].reverse(), [snapshots]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = useMemo(() => list.find((s) => s.id === (selectedId || list[0]?.id)) || null, [list, selectedId]);
 
   function onRevert(id: string) {
     revertToSnapshot(id);
@@ -27,47 +31,91 @@ export function SnapshotsDialog({ open, onClose }: { open: boolean; onClose: () 
   }
 
   function onDelete(id: string) {
-    // quick confirm for now; can be replaced by a nicer confirm dialog later
     if (window.confirm('Delete this snapshot?')) deleteSnapshot(id);
   }
 
   return (
-    <Modal open={open} onClose={onClose} size="md">
+    <Modal open={open} onClose={onClose} size="lg">
       <div className="space-y-4">
-        <h3 className="text-base font-semibold">Snapshots</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold">Snapshots</h3>
+          {selected ? (
+            <div className="flex items-center gap-2 text-[11px] text-default-500">
+              <span>Comparing to current</span>
+            </div>
+          ) : null}
+        </div>
+
         {list.length === 0 ? (
           <div className="text-sm text-default-500">No snapshots yet.</div>
         ) : (
-          <Listbox aria-label="Snapshots" selectionMode="single" className="max-h-80 overflow-auto">
-            {list.map((s) => (
-              <ListboxItem
-                key={s.id}
-                textValue={s.name}
-                onPress={() => onRevert(s.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onDelete(s.id);
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px,1fr]">
+            <div className="rounded-medium border border-default-200">
+              <Listbox
+                aria-label="Snapshots"
+                selectionMode="single"
+                selectedKeys={selected ? new Set([selected.id]) : new Set()}
+                onSelectionChange={(keys) => {
+                  const id = Array.from(keys as Set<React.Key>)[0];
+                  if (typeof id === 'string') setSelectedId(id);
                 }}
-                endContent={(
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    aria-label="Delete snapshot"
-                    className="text-danger hover:bg-danger/10 rounded-small px-1 py-0.5 text-xs"
-                  >
-                    ✕
-                  </button>
-                )}
+                className="max-h-96 overflow-auto"
               >
-                <div className="flex flex-col">
-                  <span className="text-sm">{s.name}</span>
-                  <span className="text-[11px] text-default-500">{timeAgo(s.createdAt)}</span>
-                </div>
-              </ListboxItem>
-            ))}
-          </Listbox>
+                {list.map((s) => (
+                  <ListboxItem
+                    key={s.id}
+                    textValue={s.name}
+                    onPress={() => setSelectedId(s.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onDelete(s.id);
+                    }}
+                    endContent={(
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        aria-label="Delete snapshot"
+                        className="text-danger hover:bg-danger/10 rounded-small px-1 py-0.5 text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm">{s.name}</span>
+                      <span className="text-[11px] text-default-500">{timeAgo(s.createdAt)}</span>
+                    </div>
+                  </ListboxItem>
+                ))}
+              </Listbox>
+            </div>
+
+            <div className="space-y-3">
+              {selected ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{selected.name}</span>
+                      <span className="text-[11px] text-default-500">{timeAgo(selected.createdAt)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" color="primary" onPress={() => onRevert(selected.id)}>
+                        Revert to this snapshot
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="rounded-medium border border-default-200 p-3">
+                    <SnapshotDiff base={current} target={selected.config} />
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-default-500">Select a snapshot to see details.</div>
+              )}
+            </div>
+          </div>
         )}
+
         <div className="mt-2 flex justify-end gap-2">
           <Button variant="flat" onPress={onClose}>Close</Button>
         </div>

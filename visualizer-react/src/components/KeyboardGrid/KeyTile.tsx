@@ -1,16 +1,21 @@
 import { labelForKey } from '../../utils/keys';
 import { Button, Tooltip } from '@heroui/react';
+import type { ReactNode } from 'react';
 
 export function KeyTile({
   code,
   state,
   onClick,
   onToggleLock,
+  tooltipContent,
+  tooltipDelay,
 }: {
   code: string;
   state: 'sublayer' | 'custom' | 'available' | 'thirdparty' | 'locked';
   onClick?: () => void;
   onToggleLock?: () => void;
+  tooltipContent?: ReactNode;
+  tooltipDelay?: number;
 }) {
   const color: 'primary' | 'success' | 'warning' | 'default' | 'danger' =
     state === 'sublayer'
@@ -28,7 +33,7 @@ export function KeyTile({
   const tooltip = state === 'locked' ? `${labelForKey(code)} — base layer key (locked)` : `${labelForKey(code)} — ${friendlyState}`;
   return (
     <div className="relative inline-flex items-center">
-      <Tooltip content={tooltip} placement="top">
+      <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0}>
         <Button
           size="sm"
           variant="solid"

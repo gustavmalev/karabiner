@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, Dropdown, DropdownMenu, DropdownTrigger, DropdownItem } from '@heroui/react';
 import { useStore, type NamedSnapshot } from '../../state/store';
 import { SnapshotsDialog } from './SnapshotsDialog';
@@ -20,13 +20,24 @@ export function HistoryMenu() {
   const createSnapshot = useStore((s) => s.createSnapshot);
   const revertToSnapshot = useStore((s) => s.revertToSnapshot);
 
+  const creatingRef = useRef(false);
+  const lastPromptAt = useRef(0);
   const onCreateSnapshot = () => {
+    if (creatingRef.current) return;
+    const now = Date.now();
+    if (now - lastPromptAt.current < 500) return;
+    creatingRef.current = true;
     // Delay prompt until after the dropdown closes to avoid being suppressed
     setTimeout(() => {
-      const name = window.prompt('Snapshot name', 'Snapshot');
-      if (name == null) return;
-      createSnapshot(name);
-    }, 0);
+      try {
+        const name = window.prompt('Snapshot name', 'Snapshot');
+        if (name == null) return;
+        createSnapshot(name);
+      } finally {
+        lastPromptAt.current = Date.now();
+        creatingRef.current = false;
+      }
+    }, 50);
   };
 
   const recent: NamedSnapshot[] = [...snapshots].slice(-6).reverse();
@@ -39,12 +50,13 @@ export function HistoryMenu() {
         </DropdownTrigger>
         <DropdownMenu aria-label="History menu" onAction={(key) => {
           if (key === 'manage') setManageOpen(true);
+          else if (key === 'create') onCreateSnapshot();
           else if (typeof key === 'string' && key.startsWith('snap:')) {
             const id = key.slice(5);
             revertToSnapshot(id);
           }
         }}>
-          <DropdownItem key="create" onPress={onCreateSnapshot}>Create snapshot</DropdownItem>
+          <DropdownItem key="create">Create snapshot</DropdownItem>
           <DropdownItem key="manage">Manage snapshots…</DropdownItem>
           {recent.length > 0 ? (<DropdownItem key="sep" className="h-[1px] p-0 bg-default-200" isReadOnly />) : null}
           {recent.length === 0 ? (

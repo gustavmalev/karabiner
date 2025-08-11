@@ -194,11 +194,14 @@ export function LayerDetail() {
                 const isBase = key?.toLowerCase() === lower;
                 const existing = !!sublayerCommands?.[lower];
                 const stateForKey: 'locked' | 'custom' | 'available' = isBase ? 'locked' : (existing ? 'custom' : 'available');
+                const cmd = existing && sublayerCommands ? sublayerCommands[lower] : undefined;
                 return (
                   <KeyTile
                     key={code}
                     code={lower}
                     state={stateForKey}
+                    tooltipContent={cmd ? <CommandPreview command={cmd} /> : undefined}
+                    tooltipDelay={0}
                     onClick={
                       isBase
                         ? undefined

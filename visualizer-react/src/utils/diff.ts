@@ -1,4 +1,4 @@
-import type { Command, Config } from '../types';
+import type { Command, Config, Layer, KeyCode } from '../types';
 
 export type ConfigDiff = {
   layersAdded: string[];
@@ -54,4 +54,129 @@ export function diffConfigs(current: Config | null | undefined, incoming: Config
   }
 
   return { layersAdded, layersRemoved, layersChanged, commandsAdded, commandsRemoved, commandsChanged };
+}
+
+// --- Detailed diff for UI rendering ---
+
+export type DetailedDiff = {
+  layersAdded: KeyCode[];
+  layersRemoved: KeyCode[];
+  layersChanged: KeyCode[];
+  changedLayers: Array<
+    | {
+        key: KeyCode;
+        type: 'command';
+        typeChanged: boolean;
+        from?: Layer;
+        to?: Layer;
+      }
+    | {
+        key: KeyCode;
+        type: 'sublayer';
+        typeChanged: boolean;
+        from?: Layer;
+        to?: Layer;
+        sublayer: {
+          added: Array<{ key: KeyCode; to: Command }>;
+          removed: Array<{ key: KeyCode; from: Command }>;
+          changed: Array<{ key: KeyCode; from: Command; to: Command }>;
+          moved: Array<{ from: KeyCode; to: KeyCode; command: Command }>;
+        };
+      }
+  >;
+};
+
+function sig(c?: Command): string {
+  return JSON.stringify(c ?? null);
+}
+
+export function diffConfigsDetailed(current: Config | null | undefined, incoming: Config): DetailedDiff {
+  const aLayers = new Set(Object.keys(current?.layers || {}));
+  const bLayers = new Set(Object.keys(incoming.layers || {}));
+
+  const layersAdded = [...bLayers].filter((k) => !aLayers.has(k));
+  const layersRemoved = [...aLayers].filter((k) => !bLayers.has(k));
+  const common = [...aLayers].filter((k) => bLayers.has(k));
+
+  const layersChanged: KeyCode[] = [];
+  const changedLayers: DetailedDiff['changedLayers'] = [];
+
+  for (const key of common) {
+    const a = current!.layers[key];
+    const b = incoming.layers[key];
+    if (!a || !b || a.type !== b.type) {
+      layersChanged.push(key);
+      changedLayers.push({ key, type: (b?.type as any) || 'command', typeChanged: true, from: a, to: b } as any);
+      continue;
+    }
+
+    if (a.type === 'command' && b.type === 'command') {
+      if (sig(a.command) !== sig(b.command)) {
+        layersChanged.push(key);
+        changedLayers.push({ key, type: 'command', typeChanged: false, from: a, to: b });
+      }
+      continue;
+    }
+
+    if (a.type === 'sublayer' && b.type === 'sublayer') {
+      const aCmds = a.commands || {};
+      const bCmds = b.commands || {};
+      const aKeys = new Set(Object.keys(aCmds));
+      const bKeys = new Set(Object.keys(bCmds));
+
+      let addedKeys = [...bKeys].filter((x) => !aKeys.has(x));
+      let removedKeys = [...aKeys].filter((x) => !bKeys.has(x));
+      const commonInner = [...aKeys].filter((x) => bKeys.has(x));
+
+      const changedInner = commonInner.filter((ck) => sig(aCmds[ck]) !== sig(bCmds[ck]));
+
+      // Detect moves: pair up removed/added with identical command signature
+      const removedBySig = new Map<string, KeyCode[]>();
+      for (const k of removedKeys) {
+        const s = sig(aCmds[k]);
+        removedBySig.set(s, [...(removedBySig.get(s) || []), k]);
+      }
+      const addedBySig = new Map<string, KeyCode[]>();
+      for (const k of addedKeys) {
+        const s = sig(bCmds[k]);
+        addedBySig.set(s, [...(addedBySig.get(s) || []), k]);
+      }
+
+      const moved: Array<{ from: KeyCode; to: KeyCode; command: Command }> = [];
+      for (const [s, rKeys] of removedBySig.entries()) {
+        const aKeysForSig = [...rKeys];
+        const bKeysForSig = [...(addedBySig.get(s) || [])];
+        const count = Math.min(aKeysForSig.length, bKeysForSig.length);
+        for (let i = 0; i < count; i++) {
+          const fromKey = aKeysForSig[i];
+          const toKey = bKeysForSig[i];
+          moved.push({ from: fromKey, to: toKey, command: aCmds[fromKey] });
+        }
+      }
+      // Remove moved keys from added/removed lists
+      const movedFrom = new Set(moved.map((m) => m.from));
+      const movedTo = new Set(moved.map((m) => m.to));
+      addedKeys = addedKeys.filter((k) => !movedTo.has(k));
+      removedKeys = removedKeys.filter((k) => !movedFrom.has(k));
+
+      if (addedKeys.length || removedKeys.length || changedInner.length || moved.length) {
+        layersChanged.push(key);
+        changedLayers.push({
+          key,
+          type: 'sublayer',
+          typeChanged: false,
+          from: a,
+          to: b,
+          sublayer: {
+            added: addedKeys.map((k) => ({ key: k, to: bCmds[k] })),
+            removed: removedKeys.map((k) => ({ key: k, from: aCmds[k] })),
+            changed: changedInner.map((k) => ({ key: k, from: aCmds[k], to: bCmds[k] })),
+            moved,
+          },
+        });
+      }
+    }
+  }
+
+  return { layersAdded, layersRemoved, layersChanged, changedLayers };
 }
