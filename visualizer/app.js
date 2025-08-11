@@ -83,7 +83,6 @@ const utils = {
     const label = labelMap[code] || code.toUpperCase();
     return label.length > 2 ? code : label;
   },
-
   
 
   toTitleCase: (s) => {
@@ -155,6 +154,7 @@ const storage = {
   LOCKS_KEY: 'kv.baseLocks.v1',
   FILTER_KEY: 'kv.pref.baseFilter.v1',
   KEYBOARD_KEY: 'kv.pref.keyboardLayout.v1',
+  AI_KEY: 'kv.pref.aiKey.v1',
   
   loadBaseLocks() {
     try {
@@ -187,6 +187,12 @@ const storage = {
     try {
       localStorage.setItem(this.KEYBOARD_KEY, layout);
     } catch {}
+  },
+  loadAIKey() {
+    try { return localStorage.getItem(this.AI_KEY) || ''; } catch { return ''; }
+  },
+  saveAIKey(v) {
+    try { localStorage.setItem(this.AI_KEY, v || ''); } catch {}
   }
 };
 
@@ -259,6 +265,48 @@ const api = {
     });
     if (!res.ok) throw new Error('Failed to save configuration');
     return await res.json();
+  },
+
+  // Call Google's Gemini API to suggest an inner key letter based on philosophy
+  async suggestInnerKey({ apiKey, layerKey, name, commandType, commandText, takenKeys = [] }) {
+    if (!apiKey) throw new Error('Missing API key');
+    const philosophy = `Philosophy on Layers\n\nGuidance for choosing Hyper base anchors (layers) and inner keys so the layout stays predictable, mnemonic, and conflict-free as it evolves.\n\nCore Rules\n- One base anchor per letter (unique globally).\n- Inner keys may repeat across layers.\n- Respect existing single-key Hyper mappings.\n- Fallback to defaults when there is no layer.\n\nMnemonic Selection\n- Base anchors by category mnemonic.\n- Inner key priority: initial → alias → category → next-best mnemonic.\n- Prefer minimal churn and conflict-free choices.\n\nYour task: Given an item (name, command type/text) and a target sublayer '${layerKey}', pick ONE best inner key letter (a-z) that is mnemonic and not in the taken set: [${takenKeys.join(', ')}]. If none fits, pick the next-best mnemonic. Respond with ONLY the single lowercase letter, with no explanation.`;
+    const taken = (takenKeys || []).map(k => String(k)).join(', ');
+    const prompt = `${philosophy}\n\nItem:\n- Name: ${name}\n- Command type: ${commandType}\n- Command text: ${commandText || ''}\n\nRules:\n- Only choose ONE inner letter a-z.\n- Do NOT choose any taken keys: [${taken}].\n- Prefer a mnemonic first letter or strong association.\n- Return STRICT JSON only, no prose. JSON shape: {\n  \"letter\": \"<a single lowercase a-z letter>\",\n  \"reason\": \"<short one sentence why>\"\n}`;
+
+    try {
+      // Use gemini-2.5-flash per user request
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = { contents: [{ parts: [{ text: prompt }] }] };
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+      const data = await res.json();
+      const parts = data?.candidates?.[0]?.content?.parts;
+      const text = Array.isArray(parts) ? parts.map(p => p?.text || '').join('').trim() : '';
+      let letter = '';
+      let reason = '';
+      // Try to parse strict JSON
+      try {
+        const jsonStr = (text.match(/\{[\s\S]*\}/) || [])[0] || text;
+        const obj = JSON.parse(jsonStr);
+        letter = String(obj.letter || '').trim().toLowerCase();
+        reason = String(obj.reason || '').trim();
+      } catch {}
+      if (!letter) {
+        const match = (text || '').trim().toLowerCase().match(/^[a-z]$/);
+        if (match) letter = match[0];
+      }
+      if (!letter || !/^[a-z]$/.test(letter)) throw new Error('Unexpected AI response');
+      if ((takenKeys || []).includes(letter)) throw new Error('AI picked a taken key');
+      return { letter, reason };
+    } catch (e) {
+      console.warn('suggestInnerKey error', e);
+      throw e;
+    }
   }
 };
 
@@ -417,6 +465,7 @@ const renderer = {
         <div class="detail-header">
           <h3>${utils.escapeHtml(layerKey)} Layer</h3>
           <div class="detail-actions">
+            <button class="btn-secondary btn-small" onclick="ui.placeWithAI('${layerKey}')">Place with AI</button>
             <button class="btn-secondary btn-small" onclick="ui.editLayer('${layerKey}')">Edit Layer</button>
             <button class="btn-danger btn-small" onclick="ui.deleteLayer('${layerKey}')">Delete Layer</button>
           </div>
@@ -450,7 +499,7 @@ const renderer = {
           : `ui.addCommand('${layerKey}', '${code}')`;
         return `
           <div class="key-tile" onclick="${onClick}">
-            <div class="${classes}" title="${utils.escapeHtml(desc)}">${utils.formatKeyLabel(code)}</div>
+            <div class="${classes}" data-code="${code}" title="${utils.escapeHtml(desc)}">${utils.formatKeyLabel(code)}</div>
           </div>
         `;
       }).join('');
@@ -555,6 +604,84 @@ const ui = {
       toast.classList.add('fade');
       setTimeout(() => toast.remove(), 600);
     }, 2000);
+  },
+
+  // --- AI Suggestion integrated into existing modals ---
+  async placeWithAI(layerKey) {
+    // Open existing Add Command modal and let user click Suggest inside it
+    const key = storage.loadAIKey();
+    if (!key) {
+      const entered = window.prompt('Enter Google AI API key (stored locally):', '');
+      if (!entered) { this.showToast('API key required', 'error'); return; }
+      storage.saveAIKey(entered.trim());
+      this.showToast('API key saved', 'success');
+    }
+    this.addCommand(layerKey);
+    // Ensure Suggest button is present
+    this.ensureSuggestButton(layerKey);
+  },
+
+  ensureSuggestButton(layerKey) {
+    const select = document.getElementById('command-key');
+    if (!select) return;
+    const group = select.parentElement; // .form-group
+    if (!group) return;
+    let btn = group.querySelector('#ai-suggest-key');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'ai-suggest-key';
+      btn.type = 'button';
+      btn.className = 'btn-secondary btn-small';
+      btn.textContent = 'Suggest';
+      btn.style.marginLeft = '8px';
+      group.appendChild(btn);
+    }
+    btn.onclick = () => this.suggestCommandKey(layerKey);
+  },
+
+  async suggestCommandKey(layerKey) {
+    try {
+      const apiKey = storage.loadAIKey();
+      if (!apiKey) { this.showToast('API key required', 'error'); return; }
+      const typeSel = document.getElementById('cmd-type');
+      const textInp = document.getElementById('cmd-command-text');
+      const commandType = typeSel ? typeSel.value : 'app';
+      const commandText = textInp ? String(textInp.value || '').trim() : '';
+      const name = commandText || commandType;
+      const taken = Object.keys(appState.config?.layers?.[layerKey]?.commands || {});
+      this.showToast('Asking AI…');
+      const { letter, reason } = await api.suggestInnerKey({ apiKey, layerKey, name, commandType, commandText, takenKeys: taken });
+      const select = document.getElementById('command-key');
+      if (select) {
+        // Ensure option exists then select it
+        let opt = Array.from(select.options).find(o => o.value === letter);
+        if (!opt) {
+          opt = document.createElement('option');
+          opt.value = letter;
+          opt.text = `${utils.formatKeyLabel(letter)} (${letter})`;
+          select.appendChild(opt);
+        }
+        select.value = letter;
+      }
+      // Render explanation at the bottom of the modal, not inside form controls
+      const form = document.getElementById('command-form');
+      if (form) {
+        let note = document.getElementById('ai-suggest-note');
+        if (!note) {
+          note = document.createElement('div');
+          note.id = 'ai-suggest-note';
+          note.className = 'hint';
+          note.style.marginTop = '12px';
+          form.insertAdjacentElement('afterend', note);
+        }
+        const why = reason ? ` — ${utils.escapeHtml(reason)}` : '';
+        note.textContent = `Suggested key: ${letter.toUpperCase()}${why}`;
+      }
+      this.showToast(`AI suggests '${letter.toUpperCase()}'`, 'success');
+    } catch (e) {
+      console.warn(e);
+      this.showToast('AI suggestion failed', 'error');
+    }
   },
 
   // Screen Time suggestions modal

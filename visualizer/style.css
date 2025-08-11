@@ -182,8 +182,9 @@ main {
 .key.thirdparty { --state-dot: var(--amber); }
 
 .key.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--ring);
+  /* Strong contrast inside the key plus a bright outer ring */
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #ffffff inset, 0 0 0 4px var(--ring);
 }
 
 .key.highlight {
@@ -303,19 +304,19 @@ main {
 #base-grid.keyboard-ansi .row--home .row-wrap { margin-left: 36px; }
 #base-grid.keyboard-ansi .row--bottom .row-wrap { margin-left: 56px; }
 
-/* ISO typically has an extra key on the top/home rows; adjust offsets slightly */
-#base-grid.keyboard-iso .row--top .row-wrap { margin-left: 32px; }
-#base-grid.keyboard-iso .row--home .row-wrap { margin-left: 48px; }
-#base-grid.keyboard-iso .row--bottom .row-wrap { margin-left: 64px; }
+/* ISO layout: top and home offsets align with ANSI; bottom row starts further left due to smaller left Shift */
+#base-grid.keyboard-iso .row--top .row-wrap { margin-left: 24px; }
+#base-grid.keyboard-iso .row--home .row-wrap { margin-left: 36px; }
+#base-grid.keyboard-iso .row--bottom .row-wrap { margin-left: 40px; }
 
 /* Mirror ANSI/ISO offsets inside layer-commands keyboard grid */
 .layer-commands .keyboard-ansi .row--top .row-wrap { margin-left: 24px; }
 .layer-commands .keyboard-ansi .row--home .row-wrap { margin-left: 36px; }
 .layer-commands .keyboard-ansi .row--bottom .row-wrap { margin-left: 56px; }
 
-.layer-commands .keyboard-iso .row--top .row-wrap { margin-left: 32px; }
-.layer-commands .keyboard-iso .row--home .row-wrap { margin-left: 48px; }
-.layer-commands .keyboard-iso .row--bottom .row-wrap { margin-left: 64px; }
+.layer-commands .keyboard-iso .row--top .row-wrap { margin-left: 24px; }
+.layer-commands .keyboard-iso .row--home .row-wrap { margin-left: 36px; }
+.layer-commands .keyboard-iso .row--bottom .row-wrap { margin-left: 40px; }
 
 /* Make the toggles row wrap nicely */
 .keyboard-toggle { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
