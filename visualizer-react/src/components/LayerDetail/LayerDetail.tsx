@@ -180,6 +180,12 @@ export function LayerDetail() {
             return undefined;
           })()}
           mode={showCmdModal?.mode || 'add'}
+          onDelete={() => {
+            if (showCmdModal?.mode === 'edit' && showCmdModal.cmdKey) {
+              onDeleteInner(showCmdModal.cmdKey);
+              setShowCmdModal(null);
+            }
+          }}
         />
       </Modal>
 
@@ -215,12 +221,13 @@ export function LayerDetail() {
   );
 }
 
-function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
+function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
   onCancel: () => void;
   onSave: (v: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => void;
   takenKeys: string[];
   initial?: { type: CmdType; text: string; ignore?: boolean; innerKey: string };
   mode: 'add' | 'edit';
+  onDelete?: () => void;
 }) {
   const { state, dispatch } = useAppState();
   const hasAIKey = !!state.aiKey;
@@ -231,6 +238,7 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [aiSuggestedKey, setAiSuggestedKey] = useState<string>('');
   const [aiRationale, setAiRationale] = useState<string>('');
+  const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
   const disabledTypes = new Set<CmdType>(['shell', 'key', 'window']);
   const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon', window: 'Coming soon' };
@@ -405,6 +413,11 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
         <Tooltip content="Close without saving" placement="top">
           <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
         </Tooltip>
+        {mode === 'edit' && onDelete && (
+          <Tooltip content="Delete this command" placement="top">
+            <Button variant="solid" color="danger" onPress={() => setConfirmDeleteCmdOpen(true)}>Delete</Button>
+          </Tooltip>
+        )}
         {!isAIMode ? (
           <Tooltip content="Save command" placement="top">
             <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
@@ -444,6 +457,33 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
           </Tooltip>
         )}
       </div>
+      {/* Confirm delete inner command */}
+      <Modal
+        open={confirmDeleteCmdOpen}
+        onClose={() => setConfirmDeleteCmdOpen(false)}
+        isDismissable={false}
+        isKeyboardDismissDisabled={true}
+        hideCloseButton
+        size="sm"
+      >
+        <div className="space-y-4">
+          <h3 className="text-base font-semibold">Delete Command?</h3>
+          <p className="text-sm text-default-600">This will remove the inner command for key <span className="font-semibold">{innerKey || initial?.innerKey}</span>. This action cannot be undone.</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button variant="solid" color="default" className="text-black" onPress={() => setConfirmDeleteCmdOpen(false)} autoFocus>Cancel</Button>
+            <Button
+              variant="solid"
+              color="danger"
+              onPress={() => {
+                onDelete && onDelete();
+                setConfirmDeleteCmdOpen(false);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
