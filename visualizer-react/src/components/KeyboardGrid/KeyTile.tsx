@@ -24,7 +24,8 @@ export function KeyTile({
       : 'default';
   const disabled = state === 'locked';
   const textClass = color === 'default' ? 'text-black' : 'text-white';
-  const tooltip = state === 'locked' ? `${labelForKey(code)} — base layer key (locked)` : `${labelForKey(code)} — ${state}`;
+  const friendlyState = state === 'custom' ? 'command' : state; // friendlier label than "custom"
+  const tooltip = state === 'locked' ? `${labelForKey(code)} — base layer key (locked)` : `${labelForKey(code)} — ${friendlyState}`;
   return (
     <div className="relative inline-flex items-center">
       <Tooltip content={tooltip} placement="top">

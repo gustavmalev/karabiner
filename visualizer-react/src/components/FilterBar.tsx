@@ -16,9 +16,10 @@ export function FilterBar() {
       color="primary"
       size="sm"
     >
-      {filters.map((f) => (
-        <Tab key={f} title={f} />
-      ))}
+      {filters.map((f) => {
+        const title = f === 'custom' ? 'command' : f;
+        return <Tab key={f} title={title} />;
+      })}
     </Tabs>
   );
 }

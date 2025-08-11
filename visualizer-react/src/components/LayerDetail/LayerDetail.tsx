@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from '../../state/store';
 import { selectCurrentLayer } from '../../state/selectors';
-import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
+import { buildCommandFrom, parseTypeTextFrom, getCommandDescription } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
 import { Button, Input, Select, SelectItem, Switch, Autocomplete, AutocompleteItem, Card, CardBody, Tooltip } from '@heroui/react';
@@ -16,7 +16,10 @@ export function LayerDetail() {
   const key = useStore((s) => s.currentLayerKey);
   const setConfig = useStore((s) => s.setConfig);
   const layer = useStore(selectCurrentLayer);
-  const [showCmdModal, setShowCmdModal] = useState<null | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string }>(null);
+  const [showCmdModal, setShowCmdModal] = useState<
+    | null
+    | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string; kind?: 'sublayer' | 'key' }
+  >(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   // sizing based on container
@@ -68,14 +71,20 @@ export function LayerDetail() {
     if (!key) return;
     const cmd: Command = buildCommandFrom(values.type, values.text, { ignore: values.ignore });
     const prev: Record<string, Layer> = (config?.layers || {}) as Record<string, Layer>;
-    const base: Layer = prev[key] || ({ type: 'sublayer', commands: {} as Record<string, Command> } as const);
-    const commands = {
-      ...((base.type === 'sublayer' ? base.commands : {}) as Record<string, Command>),
-    } as Record<string, Command>;
-    const innerKey = (values.innerKey || values.text?.[0] || 'a').toLowerCase();
-    commands[innerKey] = cmd;
-    const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
-    setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+    const isKeyLevel = showCmdModal?.kind === 'key' || (prev[key] && (prev[key] as Layer).type === 'command');
+    if (isKeyLevel) {
+      const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'command', command: cmd } as Layer };
+      setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+    } else {
+      const base: Layer = prev[key] || ({ type: 'sublayer', commands: {} as Record<string, Command> } as const);
+      const commands = {
+        ...((base.type === 'sublayer' ? base.commands : {}) as Record<string, Command>),
+      } as Record<string, Command>;
+      const innerKey = (values.innerKey || values.text?.[0] || 'a').toLowerCase();
+      commands[innerKey] = cmd;
+      const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
+      setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
+    }
     setShowCmdModal(null);
   };
 
@@ -101,20 +110,40 @@ export function LayerDetail() {
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Layer Detail</h2>
           {key && !layer && (
-            <Tooltip content="Create a sublayer for this key" placement="left">
-              <Button size="sm" variant="solid" color="primary" onPress={onAddLayer}>
-                Add Layer
-              </Button>
-            </Tooltip>
+            <div className="flex items-center gap-2">
+              <Tooltip content="Create a sublayer for this key" placement="left">
+                <Button size="sm" variant="solid" color="primary" onPress={onAddLayer}>
+                  Add Layer
+                </Button>
+              </Tooltip>
+              <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left">
+                <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })}>
+                  Add Key
+                </Button>
+              </Tooltip>
+            </div>
           )}
           {key && layer && (
             <div className="flex items-center gap-2">
-              <Tooltip content="Add a new inner command with AI suggestion" placement="left">
-                <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
-              </Tooltip>
-              <Tooltip content="Delete this sublayer" placement="left">
-                <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Layer</Button>
-              </Tooltip>
+              {layer.type === 'sublayer' ? (
+                <>
+                  <Tooltip content="Add a new inner command with AI suggestion" placement="left">
+                    <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
+                  </Tooltip>
+                  <Tooltip content="Delete this sublayer" placement="left">
+                    <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Layer</Button>
+                  </Tooltip>
+                </>
+              ) : (
+                <>
+                  <Tooltip content="Edit the command bound to this key" placement="left">
+                    <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'edit', kind: 'key' })}>Edit Command</Button>
+                  </Tooltip>
+                  <Tooltip content="Remove this key binding" placement="left">
+                    <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Key</Button>
+                  </Tooltip>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -163,6 +192,15 @@ export function LayerDetail() {
           )}
         </div>
       )}
+      {key && layer && layer.type === 'command' && (
+        <div className="space-y-2">
+          <div className="text-sm text-default-600">This key runs:</div>
+          <div className="rounded border bg-content1 p-3 text-sm">
+            {getCommandDescription(layer.command) || 'Command'}
+          </div>
+          <div className="text-xs text-default-500">Use Edit to change the command or Delete to clear this key.</div>
+        </div>
+      )}
 
       <Modal open={!!showCmdModal} onClose={() => setShowCmdModal(null)}>
         <CommandForm
@@ -178,6 +216,9 @@ export function LayerDetail() {
           initial={(() => {
             if (!showCmdModal) return undefined;
             if (showCmdModal.mode === 'add') {
+              if (showCmdModal.kind === 'key') {
+                return { type: 'app' as CmdType, text: '', ignore: false } as any;
+              }
               return showCmdModal.prefill ? { type: 'app' as CmdType, text: '', ignore: false, innerKey: showCmdModal.prefill } : undefined;
             }
             if (showCmdModal.mode === 'edit' && showCmdModal.cmdKey) {
@@ -191,12 +232,27 @@ export function LayerDetail() {
                 innerKey: showCmdModal.cmdKey,
               };
             }
+            if (showCmdModal.mode === 'edit' && showCmdModal.kind === 'key' && key && config?.layers?.[key]?.type === 'command') {
+              const parsed = parseTypeTextFrom((config.layers[key] as any).command);
+              return {
+                type: parsed.type as CmdType,
+                text: parsed.text || '',
+                ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
+              } as any;
+            }
             return undefined;
           })()}
           mode={showCmdModal?.mode || 'add'}
+          isKeyLevel={showCmdModal?.kind === 'key'}
           onDelete={() => {
             if (showCmdModal?.mode === 'edit' && showCmdModal.cmdKey) {
               onDeleteInner(showCmdModal.cmdKey);
+              setShowCmdModal(null);
+            }
+            if (showCmdModal?.mode === 'edit' && showCmdModal.kind === 'key' && key && config) {
+              const newLayers = { ...config.layers } as Record<string, Layer>;
+              delete newLayers[key];
+              setConfig({ ...config, layers: newLayers });
               setShowCmdModal(null);
             }
           }}
@@ -213,8 +269,8 @@ export function LayerDetail() {
         size="sm"
       >
         <div className="space-y-4">
-          <h3 className="text-base font-semibold">Delete Layer?</h3>
-          <p className="text-sm text-default-600">This will remove the entire sublayer and all its inner commands for key <span className="font-semibold">{key}</span>. This action cannot be undone.</p>
+          <h3 className="text-base font-semibold">{layer?.type === 'command' ? 'Delete Key?' : 'Delete Layer?'}</h3>
+          <p className="text-sm text-default-600">{layer?.type === 'command' ? 'This will remove the direct command bound to key ' : 'This will remove the entire sublayer and all its inner commands for key '}<span className="font-semibold">{key}</span>. This action cannot be undone.</p>
           <div className="mt-2 flex justify-end gap-2">
             <Button variant="solid" color="default" className="text-black" onPress={() => setConfirmDeleteOpen(false)} autoFocus>Cancel</Button>
             <Button
@@ -235,13 +291,14 @@ export function LayerDetail() {
   );
 }
 
-function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
+function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel }: {
   onCancel: () => void;
   onSave: (v: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => void;
   takenKeys: string[];
   initial?: { type: CmdType; text: string; ignore?: boolean; innerKey: string };
   mode: 'add' | 'edit';
   onDelete?: () => void;
+  isKeyLevel?: boolean;
 }) {
   const apps = useStore((s) => s.apps);
   const aiKey = useStore((s) => s.aiKey);
@@ -255,10 +312,10 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
   const [aiSuggestedKey, setAiSuggestedKey] = useState<string>('');
   const [aiRationale, setAiRationale] = useState<string>('');
   const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
-  const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
+  const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'key', 'shell'];
   const disabledTypes = new Set<CmdType>(['shell']);
   const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon' };
-  const isAIMode = mode === 'add' && !initial?.innerKey; // Only the Add-with-AI path shows suggestion UI
+  const isAIMode = mode === 'add' && !initial?.innerKey && !isKeyLevel; // Disable AI flow for key-level binding
 
   // Build full key list and mark taken ones as disabled
   const allKeyCodes = useMemo(() => [
@@ -482,8 +539,12 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
             )}
           </Autocomplete>
         ) : (
-          type !== 'key' && (
-            <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+          type === 'raycast' ? (
+            <Input label="Raycast deeplink" placeholder="Paste Raycast deeplink (raycast://…)" value={text} onChange={(e) => setText(e.target.value)} />
+          ) : (
+            type !== 'key' && (
+              <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+            )
           )
         )}
         {type === 'key' && (
@@ -508,41 +569,45 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete }: {
           />
         )}
         {type === 'raycast' && (
-          <Switch isSelected={ignore} onValueChange={setIgnore}>
-            Ignore
-          </Switch>
+          <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="right">
+            <Switch isSelected={ignore} onValueChange={setIgnore}>
+              Open in background
+            </Switch>
+          </Tooltip>
         )}
-        {!isAIMode ? (
-          <Autocomplete
-            label="Inner key"
-            placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
-            defaultItems={keyOptions}
-            allowsCustomValue={false}
-            inputValue={innerKey}
-            onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
-            onSelectionChange={(key) => setInnerKey(String(key || ''))}
-          >
-            {(item) => (
-              <AutocompleteItem
-                key={item.id}
-                isDisabled={item.disabled}
-                description={item.disabled ? 'Already taken' : undefined}
-              >
-                {item.label}
-              </AutocompleteItem>
-            )}
-          </Autocomplete>
-        ) : (
-          <div className="text-sm text-default-600">
-            {aiSuggestedKey ? (
-              <div>
-                Suggested key: <span className="font-semibold">{labelForKey(aiSuggestedKey)}</span>
-                {aiRationale && <div className="mt-1 text-default-500">{aiRationale}</div>}
-              </div>
-            ) : (
-              <div>Click Suggest to propose an inner key based on your command name and availability.</div>
-            )}
-          </div>
+        {!isKeyLevel && (
+          !isAIMode ? (
+            <Autocomplete
+              label="Inner key"
+              placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
+              defaultItems={keyOptions}
+              allowsCustomValue={false}
+              inputValue={innerKey}
+              onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
+              onSelectionChange={(key) => setInnerKey(String(key || ''))}
+            >
+              {(item) => (
+                <AutocompleteItem
+                  key={item.id}
+                  isDisabled={item.disabled}
+                  description={item.disabled ? 'Already taken' : undefined}
+                >
+                  {item.label}
+                </AutocompleteItem>
+              )}
+            </Autocomplete>
+          ) : (
+            <div className="text-sm text-default-600">
+              {aiSuggestedKey ? (
+                <div>
+                  Suggested key: <span className="font-semibold">{labelForKey(aiSuggestedKey)}</span>
+                  {aiRationale && <div className="mt-1 text-default-500">{aiRationale}</div>}
+                </div>
+              ) : (
+                <div>Click Suggest to propose an inner key based on your command name and availability.</div>
+              )}
+            </div>
+          )
         )}
       </div>
       <div className="mt-2 flex justify-end gap-2">
