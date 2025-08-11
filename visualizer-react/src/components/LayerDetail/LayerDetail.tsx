@@ -105,8 +105,8 @@ export function LayerDetail() {
           )}
           {key && layer && (
             <div className="flex items-center gap-2">
-              <Tooltip content="Add a new inner command" placement="left">
-                <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add Command</Button>
+              <Tooltip content="Add a new inner command with AI suggestion" placement="left">
+                <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
               </Tooltip>
               <Tooltip content="Delete this sublayer" placement="left">
                 <Button size="sm" variant="solid" color="danger" onPress={onDeleteLayer}>Delete Layer</Button>
@@ -193,10 +193,15 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
   initial?: { type: CmdType; text: string; ignore?: boolean; innerKey: string };
   mode: 'add' | 'edit';
 }) {
+  const { state, dispatch } = useAppState();
+  const hasAIKey = !!state.aiKey;
   const [type, setType] = useState<CmdType>(initial?.type || 'app');
   const [text, setText] = useState(initial?.text || '');
   const [ignore, setIgnore] = useState(!!initial?.ignore);
   const [innerKey, setInnerKey] = useState(initial?.innerKey || '');
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [aiSuggestedKey, setAiSuggestedKey] = useState<string>('');
+  const [aiRationale, setAiRationale] = useState<string>('');
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'shell', 'key'];
   const disabledTypes = new Set<CmdType>(['shell', 'key']);
   const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon', key: 'Coming soon' };
@@ -216,9 +221,44 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
       disabled: takenInnerKeys.includes(code.toLowerCase()),
     }));
   }, [allKeyCodes, takenInnerKeys]);
+
+  // Simple mnemonic-based suggestion per philosophy
+  function suggestInnerKey(): { key: string | null; reason: string } {
+    const available = allKeyCodes
+      .map((c) => c.toLowerCase())
+      .filter((c) => !takenInnerKeys.includes(c));
+    const isLetter = (c: string) => /^[a-z]$/.test(c);
+    const availableLetters = available.filter(isLetter);
+    const nameLetters = Array.from(new Set((text || '').toLowerCase().replace(/[^a-z]/g, '').split('')));
+
+    // 1) Exact initial or any letter from the name
+    for (const ch of [nameLetters[0], ...nameLetters.slice(1)]) {
+      if (ch && availableLetters.includes(ch)) {
+        return { key: ch, reason: `Picked ${ch.toUpperCase()} from the name “${text}”.` };
+      }
+    }
+
+    // 2) Category initial fallback
+    const categoryInitial: Record<CmdType, string> = { app: 'a', window: 'w', raycast: 'r', shell: 's', key: 'k' };
+    const cat = categoryInitial[type];
+    if (cat && availableLetters.includes(cat)) {
+      return { key: cat, reason: `Picked category letter ${cat.toUpperCase()} for ${type}.` };
+    }
+
+    // 3) Next-best: first free letter
+    if (availableLetters.length) {
+      return { key: availableLetters[0], reason: `Picked the first free letter ${availableLetters[0].toUpperCase()}.` };
+    }
+
+    // 4) Last resort: any free key (non-letter)
+    if (available.length) {
+      return { key: available[0], reason: `No letters available — picked the first free key ${labelForKey(available[0])}.` };
+    }
+    return { key: null, reason: 'No free keys available in this sublayer.' };
+  }
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add Command'}</h3>
+      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : 'Add with AI'}</h3>
       <div className="grid grid-cols-1 gap-4">
         <Select
           label="Type"
@@ -235,38 +275,94 @@ function CommandForm({ onCancel, onSave, takenKeys, initial, mode }: {
           ))}
         </Select>
         <Input label="Text" placeholder="e.g. Safari" value={text} onChange={(e) => setText(e.target.value)} />
+        {!hasAIKey && mode === 'add' && (
+          <Input
+            label="Gemini API key"
+            placeholder="Paste your Gemini API key to enable suggestions"
+            value={state.aiKey}
+            onChange={(e) => dispatch({ type: 'setAIKey', aiKey: e.target.value })}
+          />
+        )}
         {type === 'raycast' && (
           <Switch isSelected={ignore} onValueChange={setIgnore}>
             Ignore
           </Switch>
         )}
-        <Autocomplete
-          label="Inner key"
-          placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
-          defaultItems={keyOptions}
-          allowsCustomValue={false}
-          inputValue={innerKey}
-          onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
-          onSelectionChange={(key) => setInnerKey(String(key || ''))}
-        >
-          {(item) => (
-            <AutocompleteItem
-              key={item.id}
-              isDisabled={item.disabled}
-              description={item.disabled ? 'Already taken' : undefined}
-            >
-              {item.label}
-            </AutocompleteItem>
-          )}
-        </Autocomplete>
+        {mode === 'edit' ? (
+          <Autocomplete
+            label="Inner key"
+            placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
+            defaultItems={keyOptions}
+            allowsCustomValue={false}
+            inputValue={innerKey}
+            onInputChange={(val) => setInnerKey((val || '').toLowerCase())}
+            onSelectionChange={(key) => setInnerKey(String(key || ''))}
+          >
+            {(item) => (
+              <AutocompleteItem
+                key={item.id}
+                isDisabled={item.disabled}
+                description={item.disabled ? 'Already taken' : undefined}
+              >
+                {item.label}
+              </AutocompleteItem>
+            )}
+          </Autocomplete>
+        ) : (
+          <div className="text-sm text-default-600">
+            {aiSuggestedKey ? (
+              <div>
+                Suggested key: <span className="font-semibold">{labelForKey(aiSuggestedKey)}</span>
+                {aiRationale && <div className="mt-1 text-default-500">{aiRationale}</div>}
+              </div>
+            ) : (
+              <div>Click Suggest to propose an inner key based on your command name and availability.</div>
+            )}
+          </div>
+        )}
       </div>
       <div className="mt-2 flex justify-end gap-2">
         <Tooltip content="Close without saving" placement="top">
           <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
         </Tooltip>
-        <Tooltip content="Save command" placement="top">
-          <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
-        </Tooltip>
+        {mode === 'edit' ? (
+          <Tooltip content="Save command" placement="top">
+            <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
+          </Tooltip>
+        ) : aiSuggestedKey ? (
+          <Tooltip content="Save command" placement="top">
+            <Button variant="solid" color="primary" onPress={() => onSave({ type, text, ignore, innerKey: aiSuggestedKey })}>Save</Button>
+          </Tooltip>
+        ) : (
+          <Tooltip content={hasAIKey ? 'Suggest an inner key' : 'Add your Gemini API key to enable suggestions'} placement="top">
+            <span className="inline-block">
+              <Button
+                variant="solid"
+                color="primary"
+                isDisabled={!hasAIKey || !text.trim()}
+                isLoading={isSuggesting}
+                onPress={async () => {
+                  setIsSuggesting(true);
+                  try {
+                    // Placeholder: local heuristic suggestion per philosophy. Hook Gemini here later.
+                    const { key, reason } = suggestInnerKey();
+                    if (key) {
+                      setAiSuggestedKey(key);
+                      setInnerKey(key);
+                      setAiRationale(reason);
+                    } else {
+                      setAiRationale('No free keys available in this sublayer.');
+                    }
+                  } finally {
+                    setIsSuggesting(false);
+                  }
+                }}
+              >
+                Suggest
+              </Button>
+            </span>
+          </Tooltip>
+        )}
       </div>
     </div>
   );
