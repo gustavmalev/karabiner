@@ -83,11 +83,11 @@ const utils = {
     const label = labelMap[code] || code.toUpperCase();
     return label.length > 2 ? code : label;
   },
+
   
 
   toTitleCase: (s) => {
-    const text = String(s || '').replace(/_/g, ' ');
-    return text.charAt(0).toUpperCase() + text.slice(1);
+    return (s || '').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
   },
 
   markDirty: () => {
@@ -608,7 +608,7 @@ const ui = {
 
   // --- AI Suggestion integrated into existing modals ---
   async placeWithAI(layerKey) {
-    // Open existing Add Command modal and let user click Suggest inside it
+    // Dedicated AI modal flow: no key select, auto-suggest then Save Command
     const key = storage.loadAIKey();
     if (!key) {
       const entered = window.prompt('Enter Google AI API key (stored locally):', '');
@@ -616,9 +616,131 @@ const ui = {
       storage.saveAIKey(entered.trim());
       this.showToast('API key saved', 'success');
     }
-    this.addCommand(layerKey);
-    // Ensure Suggest button is present
-    this.ensureSuggestButton(layerKey);
+    const modal = this.ensureAIModal();
+    const form = modal.querySelector('#ai-form');
+    // Reset
+    form.reset();
+    form.dataset.layerKey = layerKey;
+    delete form.dataset.suggestedLetter;
+    // Defaults
+    const typeSel = modal.querySelector('#cmd-type');
+    const textInp = modal.querySelector('#cmd-command-text');
+    if (typeSel) typeSel.value = 'app';
+    if (textInp) textInp.value = '';
+    this.renderCommandConfig('cmd', 'app');
+    // UI state
+    const saveBtn = modal.querySelector('#ai-save');
+    const note = modal.querySelector('#ai-suggest-note');
+    if (note) note.textContent = '';
+    if (saveBtn) {
+      saveBtn.textContent = 'Suggest';
+      saveBtn.disabled = false;
+      saveBtn.dataset.mode = 'suggest';
+    }
+    this.showModal('ai-modal');
+  },
+
+  // --- AI modal helpers (dedicated modal for Place with AI) ---
+  ensureAIModal() {
+    let modal = document.getElementById('ai-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'ai-modal';
+    modal.className = 'modal hidden';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Place with AI</h3>
+          <button class="modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="ai-form" data-layer-key="">
+            <div class="form-group" id="cmd-text-group">
+              <label for="cmd-command-text">Command:</label>
+              <input type="text" id="cmd-command-text" placeholder="e.g., Comet or top-left or echo hi">
+            </div>
+            <div class="form-group">
+              <label for="cmd-type">Command Type:</label>
+              <select id="cmd-type">
+                <option value="key" disabled>Key Press (coming soon)</option>
+                <option value="app">Open App</option>
+                <option value="shell">Shell Command</option>
+                <option value="window">Window</option>
+                <option value="raycast">Raycast</option>
+              </select>
+            </div>
+            <div id="cmd-config"></div>
+          </form>
+          <div id="ai-suggest-note" class="hint"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="ai-cancel" class="btn-secondary">Cancel</button>
+          <button id="ai-save" class="btn-primary" data-mode="suggest">Suggest</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // Close
+    modal.querySelector('.modal-close')?.addEventListener('click', () => this.hideModal());
+    // Footer buttons
+    modal.querySelector('#ai-cancel')?.addEventListener('click', (e) => { e.preventDefault(); this.hideModal(); });
+    modal.querySelector('#ai-save')?.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const btn = e.currentTarget;
+      const mode = btn.dataset.mode || 'save';
+      if (mode === 'suggest') {
+        const form = modal.querySelector('#ai-form');
+        await this._runAISuggest(form.dataset.layerKey, modal);
+        return;
+      }
+      await this._aiSave(modal);
+    });
+    // Change type renders config slot
+    modal.querySelector('#cmd-type')?.addEventListener('change', (e) => this.renderCommandConfig('cmd', e.target.value));
+    return modal;
+  },
+
+  async _runAISuggest(layerKey, modal) {
+    const apiKey = storage.loadAIKey();
+    if (!apiKey) throw new Error('Missing API key');
+    const typeSel = modal.querySelector('#cmd-type');
+    const textInp = modal.querySelector('#cmd-command-text');
+    const commandType = typeSel ? typeSel.value : 'app';
+    const commandText = textInp ? String(textInp.value || '').trim() : '';
+    const name = commandText || commandType;
+    const taken = Object.keys(appState.config?.layers?.[layerKey]?.commands || {});
+    const saveBtn = modal.querySelector('#ai-save');
+    const note = modal.querySelector('#ai-suggest-note');
+    if (saveBtn) { saveBtn.textContent = 'Suggesting…'; saveBtn.disabled = true; saveBtn.dataset.mode = 'save'; }
+    this.showToast('Asking AI…');
+    const { letter, reason } = await api.suggestInnerKey({ apiKey, layerKey, name, commandType, commandText, takenKeys: taken });
+    const form = modal.querySelector('#ai-form');
+    form.dataset.suggestedLetter = letter;
+    if (note) {
+      const why = reason ? ` — ${utils.escapeHtml(reason)}` : '';
+      note.textContent = `Suggested key: ${letter.toUpperCase()}${why}`;
+    }
+    if (saveBtn) { saveBtn.textContent = 'Save Command'; saveBtn.disabled = false; saveBtn.dataset.mode = 'save'; }
+  },
+
+  async _aiSave(modal) {
+    const form = modal.querySelector('#ai-form');
+    const layerKey = form.dataset.layerKey;
+    const letter = form.dataset.suggestedLetter;
+    if (!letter) { this.showToast('Suggest a key first', 'error'); return; }
+    const cmdType = (modal.querySelector('#cmd-type')?.value) || 'app';
+    const cmdText = (cmdType === 'window')
+      ? (modal.querySelector('#cmd-window-select')?.value || '')
+      : ((modal.querySelector('#cmd-command-text')?.value || '').trim());
+    const cmdIgnore = (cmdType === 'raycast') ? !!modal.querySelector('#cmd-raycast-ignore')?.checked : false;
+    if (!appState.config) appState.config = { layers: {} };
+    if (!appState.config.layers) appState.config.layers = {};
+    if (!appState.config.layers[layerKey]) appState.config.layers[layerKey] = { type: 'sublayer', commands: {} };
+    if (!appState.config.layers[layerKey].commands) appState.config.layers[layerKey].commands = {};
+    appState.config.layers[layerKey].commands[letter] = buildCommandFrom(cmdType, cmdText, { ignore: cmdIgnore });
+    utils.markDirty();
+    this.hideModal();
+    this.showToast('Command added successfully!', 'success');
+    renderer.renderLayerDetail(layerKey);
   },
 
   ensureSuggestButton(layerKey) {
