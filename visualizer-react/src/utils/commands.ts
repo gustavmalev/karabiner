@@ -1,4 +1,5 @@
 import type { Command } from '../types';
+import { normalizeAppName, normalizeRaycast, sanitizeText, validateRaycastDeeplink, validateShellCommand } from './security';
 
 type Action = {
   shell_command?: string;
@@ -13,7 +14,8 @@ export function buildCommandFrom(
 ): Command {
   const value = String(text || '').trim();
   if (type === 'app' && value) {
-    return { to: [{ shell_command: `open -a '${value}.app'` }], description: `Open ${value}` };
+    const safeName = normalizeAppName(value);
+    return { to: [{ shell_command: `open -a '${safeName}.app'` }], description: `Open ${safeName}` };
   }
   if (type === 'window' && value) {
     return {
@@ -23,12 +25,17 @@ export function buildCommandFrom(
   }
   if (type === 'raycast' && value) {
     const ignore = options.ignore === true;
-    const deeplink = value.startsWith('raycast://') ? value : `raycast://${value}`;
+    const deeplink = normalizeRaycast(value);
+    const ok = validateRaycastDeeplink(deeplink);
+    if (!ok.valid) throw new Error(`Invalid Raycast deeplink: ${ok.reason}`);
     const prefix = ignore ? '-g ' : '';
     return { to: [{ shell_command: `open ${prefix}${deeplink}` }], description: `Open ${deeplink}` };
   }
   if (type === 'shell' && value) {
-    return { to: [{ shell_command: value }], description: value };
+    const safe = sanitizeText(value);
+    const ok = validateShellCommand(safe);
+    if (!ok.valid) throw new Error(`Blocked shell command: ${ok.reason}`);
+    return { to: [{ shell_command: safe }], description: safe };
   }
   if (type === 'key') {
     // Expect JSON: { key_code: string; modifiers?: string[] }

@@ -1,5 +1,6 @@
 import type { StoreState } from './types';
 import type { KeyCode, Config, Data, Layer, Command } from '../types';
+import { diffConfigsDetailed, type DetailedDiff } from '../utils/diff';
 
 // Stable empty constants to avoid returning new objects from selectors
 const EMPTY_LAYERS: Readonly<Record<KeyCode, Layer>> = Object.freeze({}) as Readonly<Record<KeyCode, Layer>>;
@@ -174,4 +175,61 @@ export const selectConflicts = (s: StoreState): Array<{ innerKey: KeyCode; outer
   memoConflictsLayersRef = layers;
   memoConflicts = result;
   return memoConflicts;
+};
+
+// Factory selectors: per-key granular accessors to avoid over-subscribing
+export const makeSelectLayerByKey = (outerKey: KeyCode | null) => (s: StoreState): Layer | null => {
+  if (!outerKey) return null;
+  return (s.config?.layers?.[outerKey] as Layer) ?? null;
+};
+
+export const makeSelectInnerCommands = (outerKey: KeyCode | null) => (s: StoreState): Record<KeyCode, Command> | undefined => {
+  if (!outerKey) return undefined;
+  const layer = s.config?.layers?.[outerKey] as Layer | undefined;
+  if (!layer || layer.type !== 'sublayer') return undefined;
+  return layer.commands || (EMPTY_COMMANDS as Record<KeyCode, Command>);
+};
+
+export const makeSelectBlockedForKey = (outerKey: KeyCode | null) => (s: StoreState): boolean => {
+  if (!outerKey) return false;
+  return !!s.blockedKeys?.[outerKey];
+};
+
+// Memoized dirty map by base key, computed from lastSavedConfig vs current config
+let memoDirtyRefA: Config | null = null;
+let memoDirtyRefB: Config | null = null;
+let memoDirtyByKey: Readonly<Record<KeyCode, 'add' | 'remove' | 'change' | 'move'>> = Object.freeze({});
+
+export const selectDirtyByBaseKey = (s: StoreState): Readonly<Record<KeyCode, 'add' | 'remove' | 'change' | 'move'>> => {
+  const a = s.lastSavedConfig;
+  const b = s.config;
+  if (a === memoDirtyRefA && b === memoDirtyRefB) return memoDirtyByKey;
+  if (!a || !b) {
+    memoDirtyRefA = a;
+    memoDirtyRefB = b;
+    memoDirtyByKey = Object.freeze({});
+    return memoDirtyByKey;
+  }
+  const det: DetailedDiff = diffConfigsDetailed(a, b);
+  const out: Record<KeyCode, 'add' | 'remove' | 'change' | 'move'> = {};
+  for (const k of det.layersAdded) out[k as KeyCode] = 'add';
+  for (const k of det.layersRemoved) out[k as KeyCode] = 'remove';
+  for (const entry of det.changedLayers) {
+    const key = entry.key as KeyCode;
+    if (out[key]) continue;
+    if ((entry as any).typeChanged) {
+      out[key] = 'change';
+      continue;
+    }
+    if (entry.type === 'command') {
+      out[key] = 'change';
+    } else if (entry.type === 'sublayer') {
+      const hasMove = entry.sublayer.moved.length > 0;
+      out[key] = hasMove ? 'move' : 'change';
+    }
+  }
+  memoDirtyRefA = a;
+  memoDirtyRefB = b;
+  memoDirtyByKey = Object.freeze(out);
+  return memoDirtyByKey;
 };

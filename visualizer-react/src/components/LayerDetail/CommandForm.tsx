@@ -8,6 +8,9 @@ import {windowCommandItems} from '../../data/windowCommands';
 import {labelForKey} from '../../utils/keys';
 import {AppCommandForm} from './CommandTypes/AppCommandForm';
 import {WindowCommandForm} from './CommandTypes/WindowCommandForm';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useCommandValidation } from '../../hooks/useCommandValidation';
 
 export function CommandForm(props: {
   onCancel: () => void;
@@ -51,11 +54,16 @@ export function CommandForm(props: {
   } = useAISuggestions();
 
   const [confirmDeleteCmdOpen, setConfirmDeleteCmdOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { handle } = useErrorHandler();
+  const { notify } = useNotifications();
+  const validation = useCommandValidation({ type, text, ignore });
 
   const typeOptions: CmdType[] = ['app', 'window', 'raycast', 'key', 'shell'];
   const disabledTypes = new Set<CmdType>(['shell']);
   const typeDescriptions: Partial<Record<CmdType, string>> = { shell: 'Coming soon' };
   const canSaveEffective = canSave && !isBlocked;
+  const canSaveSecure = canSaveEffective && validation.isValid;
 
   type KeyOption = { id: string; label: string; disabled?: boolean };
 
@@ -144,6 +152,11 @@ export function CommandForm(props: {
           </Tooltip>
         )}
 
+        {/* Inline validation feedback */}
+        {!validation.isValid && (
+          <div className="text-xs text-danger-500">{validation.reason || 'Invalid input'}</div>
+        )}
+
         {!isKeyLevel && (
           !isAIMode ? (
             <Autocomplete
@@ -228,11 +241,47 @@ export function CommandForm(props: {
         )}
         {!isAIMode ? (
           <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
-            <Button variant="solid" color="primary" isDisabled={!canSaveEffective} onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              isDisabled={!canSaveSecure || isSaving}
+              isLoading={isSaving}
+              onPress={() => {
+                try {
+                  setIsSaving(true);
+                  onSave({ type, text, ignore, innerKey });
+                  notify({ type: 'success', message: 'Command saved' });
+                } catch (e) {
+                  handle(e, 'Save command');
+                } finally {
+                  setIsSaving(false);
+                }
+              }}
+            >
+              Save
+            </Button>
           </Tooltip>
         ) : suggestedKey ? (
           <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
-            <Button variant="solid" color="primary" isDisabled={!canSaveEffective} onPress={() => onSave({ type, text, ignore, innerKey: suggestedKey })}>Save</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              isDisabled={!canSaveSecure || isSaving}
+              isLoading={isSaving}
+              onPress={() => {
+                try {
+                  setIsSaving(true);
+                  onSave({ type, text, ignore, innerKey: suggestedKey });
+                  notify({ type: 'success', message: 'Command saved' });
+                } catch (e) {
+                  handle(e, 'Save command');
+                } finally {
+                  setIsSaving(false);
+                }
+              }}
+            >
+              Save
+            </Button>
           </Tooltip>
         ) : (
           <Tooltip content={hasAIKey ? 'Suggest a key in this sublayer' : 'Add your Gemini API key to enable suggestions'} placement="top" motionProps={overlayMotion}>

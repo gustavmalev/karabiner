@@ -177,6 +177,80 @@ export function savePersistedAsync(p: Persisted) {
   return saveQueue;
 }
 
+// Debounced save with configurable delay and max wait (trailing)
+let debounceTimer: number | null = null;
+let maxTimer: number | null = null;
+let pendingPersisted: Persisted | null = null;
+
+export type DebounceOptions = {
+  delay?: number; // debounce delay
+  maxDelay?: number; // maximum time a save can be delayed
+  onSaved?: () => void; // optional callback when a write completes
+};
+
+export function debouncedSavePersisted(p: Persisted, opts: DebounceOptions = {}) {
+  const delay = Math.max(0, opts.delay ?? 250);
+  const maxDelay = Math.max(delay, opts.maxDelay ?? 500); // ensure max >= delay
+  pendingPersisted = p;
+
+  // schedule trailing save
+  if (debounceTimer !== null) {
+    window.clearTimeout(debounceTimer);
+  }
+  debounceTimer = window.setTimeout(() => {
+    const toWrite = pendingPersisted;
+    pendingPersisted = null;
+    debounceTimer = null;
+    if (toWrite) {
+      saveQueue = saveQueue
+        .then(() => doSave(toWrite, opts.onSaved))
+        .catch((e) => console.warn('Save queue error', e));
+    }
+    if (maxTimer !== null) {
+      window.clearTimeout(maxTimer);
+      maxTimer = null;
+    }
+  }, delay);
+
+  // schedule max wait if not already
+  if (maxTimer === null) {
+    maxTimer = window.setTimeout(() => {
+      const toWrite = pendingPersisted;
+      pendingPersisted = null;
+      if (debounceTimer !== null) {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      // Write if we accumulated pending state within the window
+      if (toWrite) {
+        saveQueue = saveQueue
+          .then(() => doSave(toWrite, opts.onSaved))
+          .catch((e) => console.warn('Save queue error', e));
+      }
+      if (maxTimer !== null) {
+        window.clearTimeout(maxTimer);
+        maxTimer = null;
+      }
+    }, maxDelay);
+  }
+}
+
+export async function flushDebouncedPersisted() {
+  const toWrite = pendingPersisted;
+  pendingPersisted = null;
+  if (debounceTimer !== null) {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  if (maxTimer !== null) {
+    window.clearTimeout(maxTimer);
+    maxTimer = null;
+  }
+  if (toWrite) {
+    await saveQueue.then(() => doSave(toWrite)).catch((e) => console.warn('Save queue error', e));
+  }
+}
+
 export function exportJson(p: Persisted) {
   const blob = new Blob([
     JSON.stringify({

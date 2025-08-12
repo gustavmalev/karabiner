@@ -2,9 +2,17 @@ import {useCallback, useMemo, useState} from 'react';
 import {useStore} from '../state/store';
 import {numberRow, topRow, homeRow, bottomRow, labelForKey} from '../utils/keys';
 import type {CmdType} from './useCommandForm';
+import { analyzeContext, rankLettersByContext } from '../services/aiService';
 
+/**
+ * AI suggestion hook with lightweight context awareness.
+ * Uses keyboard comfort heuristics + recent usage patterns to pick mnemonic keys.
+ */
 export function useAISuggestions() {
   const apps = useStore((s) => s.apps);
+  const history = useStore((s) => s.history);
+  const snapshots = useStore((s) => s.snapshots);
+  const usageCtx = useMemo(() => analyzeContext({ history, snapshots, apps } as any), [history, snapshots, apps]);
   const aiKey = useStore((s) => s.aiKey);
   const setAIKey = useStore((s) => s.setAIKey);
 
@@ -73,7 +81,11 @@ export function useAISuggestions() {
     }
     const mnemonicCandidates = [...categoryLetters, ...initials, ...uniqueOthers];
 
-    const mnemonicAvailable = mnemonicCandidates.filter((ch) => availableLetters.includes(ch));
+    let mnemonicAvailable = mnemonicCandidates.filter((ch) => availableLetters.includes(ch));
+    if (mnemonicAvailable.length) {
+      // Rank by context
+      mnemonicAvailable = rankLettersByContext(mnemonicAvailable, usageCtx, type);
+    }
     if (mnemonicAvailable.length) {
       const head = mnemonicAvailable[0]!;
       const rest = mnemonicAvailable.slice(1);
@@ -113,7 +125,7 @@ export function useAISuggestions() {
       return { key: anyNonLetter, reason: `No letters available — picked free key ${labelForKey(anyNonLetter)}.` };
     }
     return { key: null, reason: 'No free keys available in this sublayer.' };
-  }, [allKeyCodes, apps]);
+  }, [allKeyCodes, apps, usageCtx]);
 
   const runSuggestion = useCallback((params: { type: CmdType; text: string; takenInnerKeys: string[] }) => {
     setIsSuggesting(true);

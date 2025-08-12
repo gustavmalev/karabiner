@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo, type CSSProperties } from 'react';
 import { useStore } from '../../state/store';
-import { buildKeyClassification } from '../../state/selectors';
+import { buildKeyClassification, selectData, selectConfig, selectBlockedKeys, selectFilter, selectDirtyByBaseKey } from '../../state/selectors';
 import { KeyTile } from './KeyTile';
 import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
-import { diffConfigsDetailed, type DetailedDiff } from '../../utils/diff';
+import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 // No extra UI elements here to keep layout clean
 
 export function KeyboardGrid() {
-  const data = useStore((s) => s.data);
-  const config = useStore((s) => s.config);
-  const lastSavedConfig = useStore((s) => s.lastSavedConfig);
-  const blockedKeys = useStore((s) => s.blockedKeys);
-  const filter = useStore((s) => s.filter);
+  const data = useStore(selectData);
+  const config = useStore(selectConfig);
+  const blockedKeys = useStore(selectBlockedKeys);
+  const filter = useStore(selectFilter);
   const setCurrentLayerKey = useStore((s) => s.setCurrentLayerKey);
+  const dirtyByKey = useStore(selectDirtyByBaseKey);
   const { classify } = useMemo(() => buildKeyClassification(data, config, blockedKeys), [data, config, blockedKeys]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  usePerformanceMonitor('KeyboardGrid');
 
   // Measure container width to size keys to the box
   useEffect(() => {
@@ -60,29 +61,7 @@ export function KeyboardGrid() {
 
   const filteredRows = useMemo(() => rows.map((r) => r.filter(passesFilter)), [rows, passesFilter]);
 
-  // Build per-base-key dirty map from detailed diff
-  const dirtyByKey = useMemo(() => {
-    const out: Record<string, 'add' | 'remove' | 'change' | 'move'> = {};
-    if (!lastSavedConfig || !config) return out;
-    const det: DetailedDiff = diffConfigsDetailed(lastSavedConfig, config);
-    for (const k of det.layersAdded) out[k] = 'add';
-    for (const k of det.layersRemoved) out[k] = 'remove';
-    for (const entry of det.changedLayers) {
-      // Skip if explicitly marked as add/remove already
-      if (out[entry.key]) continue;
-      if ((entry as any).typeChanged) {
-        out[entry.key] = 'change';
-        continue;
-      }
-      if (entry.type === 'command') {
-        out[entry.key] = 'change';
-      } else if (entry.type === 'sublayer') {
-        const hasMove = entry.sublayer.moved.length > 0;
-        out[entry.key] = hasMove ? 'move' : 'change';
-      }
-    }
-    return out;
-  }, [lastSavedConfig, config]);
+  // Dirty map now provided by selector; memoized globally
 
   const keyHandlers = useMemo(() => {
     const map: Record<string, () => void> = {};

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { KeyCode } from '../types';
 import type { StoreSnapshot, NamedSnapshot, StoreState, AppSlice, UISlice, ConfigSlice } from './types';
-import { buildPersisted, loadPersisted, savePersistedAsync } from './persistence';
+import { buildPersisted, loadPersisted, debouncedSavePersisted, flushDebouncedPersisted } from './persistence';
 import { shallow, deepEqual } from './utils';
 import { getApps, getConfig, getData } from '../api/client';
 
@@ -224,8 +224,14 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
           snapshots: snap.snapshots,
           settings: snap.settings,
         });
-        void savePersistedAsync(p);
+        // Debounced to batch rapid edits; max 500ms delay
+        debouncedSavePersisted(p, { delay: 200, maxDelay: 500 });
       }
     }
   );
+
+  // Emergency flush on unload to reduce data loss risk
+  window.addEventListener('beforeunload', () => {
+    void flushDebouncedPersisted();
+  });
 }

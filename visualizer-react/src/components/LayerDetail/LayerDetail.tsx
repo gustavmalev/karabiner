@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '../../state/store';
-import { selectCurrentLayer } from '../../state/selectors';
+import { selectCurrentLayer, makeSelectBlockedForKey, makeSelectInnerCommands } from '../../state/selectors';
 import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
@@ -12,6 +12,7 @@ import type { CmdType } from '../../hooks/useCommandForm';
 import { CommandForm } from './CommandForm';
 import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
 import { CommandPreview } from '../CommandPreview';
+import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 
 // CmdType moved to hooks/useCommandForm for single source of truth
 
@@ -19,14 +20,16 @@ export function LayerDetail() {
   const config = useStore((s) => s.config);
   const key = useStore((s) => s.currentLayerKey);
   const setConfig = useStore((s) => s.setConfig);
-  const blocked = useStore((s) => s.blockedKeys);
   const toggleBlocked = useStore((s) => s.toggleBlocked);
   const layer = useStore(selectCurrentLayer);
+  const blockedForKey = useStore(useMemo(() => makeSelectBlockedForKey(key), [key]));
+  const sublayerCommandsSel = useStore(useMemo(() => makeSelectInnerCommands(key), [key]));
   const [showCmdModal, setShowCmdModal] = useState<
     | null
     | { mode: 'add' | 'edit'; cmdKey?: string; prefill?: string; kind?: 'sublayer' | 'key' }
   >(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  usePerformanceMonitor('LayerDetail');
 
   const rows = useMemo(() => [numberRow, topRow, homeRow, bottomRow] as string[][], []);
 
@@ -39,7 +42,7 @@ export function LayerDetail() {
     };
     setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
     // Clear blocked state when a layer is created for this key
-    if (blocked[key]) toggleBlocked(key);
+    if (key && blockedForKey) toggleBlocked(key);
   };
 
   const onDeleteLayer = () => {
@@ -60,7 +63,7 @@ export function LayerDetail() {
       const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'command', command: cmd } as Layer };
       setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
       // Clear blocked state when a direct command is created for this key
-      if (blocked[key]) toggleBlocked(key);
+      if (key && blockedForKey) toggleBlocked(key);
     } else {
       const base: Layer = prev[key] || ({ type: 'sublayer', commands: {} as Record<string, Command> } as const);
       const commands = {
@@ -71,15 +74,15 @@ export function LayerDetail() {
       const newLayers: Record<string, Layer> = { ...prev, [key]: { type: 'sublayer', commands } };
       setConfig({ ...(config || { layers: {} as Record<string, Layer> }), layers: newLayers });
       // Creating the first inner command also implies the key is set up; clear blocked
-      if (blocked[key]) toggleBlocked(key);
+      if (key && blockedForKey) toggleBlocked(key);
     }
     setShowCmdModal(null);
   };
 
   const sublayerCommands: Record<string, Command> | undefined = useMemo(() => {
     if (!layer || layer.type !== 'sublayer') return undefined;
-    return layer.commands;
-  }, [layer]);
+    return sublayerCommandsSel;
+  }, [layer, sublayerCommandsSel]);
 
   const takenKeysMemo = useMemo(() => {
     return [...Object.keys(sublayerCommands || {}), ...(key ? [key] : [])];
@@ -159,7 +162,7 @@ export function LayerDetail() {
               <Tooltip content="Mark this base key as blocked by a third-party app. You won't be able to add or edit commands while blocked." placement="bottom" motionProps={overlayMotion}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-default-500">Blocked (3rd-party)</span>
-                  <Switch size="sm" isSelected={!!(key && blocked[key])} onValueChange={() => key && toggleBlocked(key)} />
+                  <Switch size="sm" isSelected={!!(key && blockedForKey)} onValueChange={() => key && toggleBlocked(key)} />
                 </div>
               </Tooltip>
             )}
@@ -167,12 +170,12 @@ export function LayerDetail() {
           {key && !layer && (
             <div className="flex items-center gap-2">
               <Tooltip content="Create a sublayer for this key" placement="left" motionProps={overlayMotion}>
-                <Button size="sm" variant="solid" color="primary" onPress={onAddLayer} isDisabled={!!(key && blocked[key])}>
+                <Button size="sm" variant="solid" color="primary" onPress={onAddLayer} isDisabled={!!(key && blockedForKey)}>
                   Add Layer
                 </Button>
               </Tooltip>
               <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left" motionProps={overlayMotion}>
-                <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })} isDisabled={!!(key && blocked[key])}>
+                <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })} isDisabled={!!(key && blockedForKey)}>
                   Add Key
                 </Button>
               </Tooltip>
@@ -206,7 +209,7 @@ export function LayerDetail() {
         {!key && <div className="text-sm text-slate-400">Select a base key to view details.</div>}
         {key && !layer && (
           <div className="text-sm text-slate-400">
-            {blocked[key] ? (
+            {blockedForKey ? (
               <span>This key is marked as blocked. Unblock it to add a layer or a direct command.</span>
             ) : (
               <span>No config for {key}.</span>
@@ -246,7 +249,7 @@ export function LayerDetail() {
             {...(cmdFormInitial ? { initial: cmdFormInitial } : {})}
             mode={showCmdModal?.mode || 'add'}
             isKeyLevel={showCmdModal?.kind === 'key'}
-            isBlocked={!!(key && !layer && blocked[key])}
+            isBlocked={!!(key && !layer && blockedForKey)}
             onDelete={() => {
               if (showCmdModal?.mode === 'edit' && showCmdModal.cmdKey) {
                 onDeleteInner(showCmdModal.cmdKey);
