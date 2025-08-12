@@ -33,7 +33,7 @@ export interface UISlice {
   keyboardLayout: KeyboardLayout;
   aiKey: string;
   importDialogOpen: boolean;
-  settings: { showUndoRedo: boolean };
+  settings: { showUndoRedo: boolean; maxSnapshots: number };
 
   setCurrentLayerKey: (key: KeyCode | null) => void;
   setFilter: (filter: Filter) => void;
@@ -43,7 +43,7 @@ export interface UISlice {
   setAIKey: (aiKey: string) => void;
   openImportDialog: () => void;
   closeImportDialog: () => void;
-  setSettings: (patch: Partial<{ showUndoRedo: boolean }>) => void;
+  setSettings: (patch: Partial<{ showUndoRedo: boolean; maxSnapshots: number }>) => void;
 }
 
 // Config slice (document + history)
@@ -56,7 +56,7 @@ export interface ConfigSlice {
   future: StoreSnapshot[];
   historyLimit: number;
   snapshots: NamedSnapshot[];
-  snapshotsLimit: number;
+  // snapshot limit is now user-configurable via settings; 0 means unlimited
 
   setConfig: (config: Config) => void;
   markDirty: () => void;

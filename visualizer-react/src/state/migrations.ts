@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SCHEMA_VERSION, zPersisted, type Persisted } from './schema';
+import { db, PERSISTED_ID } from './database';
 
 // Map of migration steps from version n -> n+1
 // Each function must be a pure transformation and safe to run exactly once.
@@ -60,3 +61,28 @@ export const zExported = z.object({
   config: zPersisted.shape.config,
 });
 export type Exported = z.infer<typeof zExported>;
+
+// One-time migration: move legacy localStorage payload into IndexedDB.
+// Returns the migrated and validated Persisted object when migration occurs; otherwise null.
+export async function migrateLegacyLocalStorageToIndexedDB(): Promise<Persisted | null> {
+  const STORAGE_KEY = 'vrx:persisted';
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    const migrated = migrateToLatest(obj);
+    try {
+      await db.persisted.put({ id: PERSISTED_ID, ...migrated });
+      // Only clear after a confirmed write to prevent data loss
+      window.localStorage.removeItem(STORAGE_KEY);
+      return migrated;
+    } catch (e) {
+      console.warn('Failed writing migrated legacy state to IndexedDB; keeping localStorage copy', e);
+      return migrated; // Still return migrated for in-memory use; caller may decide not to clear localStorage
+    }
+  } catch (e) {
+    console.warn('Legacy localStorage migration failed', e);
+    return null;
+  }
+}

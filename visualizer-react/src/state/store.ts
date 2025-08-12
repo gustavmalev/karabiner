@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { KeyCode } from '../types';
 import type { StoreSnapshot, NamedSnapshot, StoreState, AppSlice, UISlice, ConfigSlice } from './types';
-import { buildPersisted, loadPersisted, savePersistedDebounced } from './persistence';
+import { buildPersisted, loadPersisted, savePersistedAsync } from './persistence';
 import { shallow } from './utils';
 import { getApps, getConfig, getData } from '../api/client';
 
@@ -24,8 +24,7 @@ const initialBase = () => ({
   future: [],
   historyLimit: 50,
   snapshots: [],
-  snapshotsLimit: 10,
-  settings: { showUndoRedo: true },
+  settings: { showUndoRedo: true, maxSnapshots: 100 },
 });
 
 const makeSnapshot = (s: StoreState): StoreSnapshot => ({
@@ -48,7 +47,7 @@ const createUISlice = (set: any): UISlice => ({
   keyboardLayout: 'ansi',
   aiKey: '',
   importDialogOpen: false,
-  settings: { showUndoRedo: true },
+  settings: { showUndoRedo: true, maxSnapshots: 100 },
 
   setCurrentLayerKey: (key) => set({ currentLayerKey: key }),
   setFilter: (filter) => set({ filter }),
@@ -74,7 +73,6 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
   future: [],
   historyLimit: 50,
   snapshots: [],
-  snapshotsLimit: 10,
 
   setConfig: (config) => set((prev: StoreState) => {
     const hist = [...prev.history, makeSnapshot(prev as StoreState)];
@@ -126,7 +124,10 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
       config: prev.config,
     };
     const list = [...prev.snapshots, entry];
-    while (list.length > prev.snapshotsLimit) list.shift();
+    const limit = (get().settings?.maxSnapshots ?? 100);
+    if (limit > 0) {
+      while (list.length > limit) list.shift();
+    }
     return { snapshots: list } as Partial<StoreState> as StoreState;
   }),
   revertToSnapshot: (id: string) => set((prev: StoreState) => {
@@ -154,7 +155,7 @@ export const useStore = create<StoreState>()(subscribeWithSelector((set, get) =>
 
 // Initialize store: hydrate from persisted, then fetch data/apps and config (if needed)
 export async function initializeStore() {
-  const persisted = loadPersisted();
+  const persisted = await loadPersisted();
   if (persisted) {
     useStore.setState({
       config: persisted.config,
@@ -167,7 +168,7 @@ export async function initializeStore() {
       aiKey: persisted.aiKey,
       isDirty: false,
       snapshots: persisted.snapshots ?? [],
-      settings: (persisted as any).settings ?? { showUndoRedo: true },
+      settings: (persisted as any).settings ?? { showUndoRedo: true, maxSnapshots: 100 },
     });
   }
   const [data, apps] = await Promise.all([getData(), getApps()]);
@@ -182,7 +183,7 @@ export async function initializeStore() {
 // During migration, we can disable auto-persistence here and let the legacy provider handle it
 export const enableStorePersistence = true;
 
-// Subscribe to changes and persist locally with debounce when dirty
+// Subscribe to changes and persist locally immediately (async, queued) when dirty
 if (typeof window !== 'undefined' && enableStorePersistence) {
   useStore.subscribe(
     (s) => ({
@@ -210,7 +211,7 @@ if (typeof window !== 'undefined' && enableStorePersistence) {
           snapshots: snap.snapshots,
           settings: snap.settings,
         });
-        savePersistedDebounced(p);
+        void savePersistedAsync(p);
       }
     }
   );

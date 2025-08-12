@@ -45,6 +45,8 @@ export const zSnapshot = z.object({
 
 export const zSettings = z.object({
   showUndoRedo: z.boolean().default(true),
+  // 0 means unlimited
+  maxSnapshots: z.number().int().nonnegative().default(100),
 });
 
 export const zPersisted = z.object({
@@ -57,7 +59,7 @@ export const zPersisted = z.object({
   blockedKeys: z.record(zKeyCode, z.boolean()).default({}),
   lastSavedAt: z.number().int().nonnegative().nullable().default(null),
   snapshots: z.array(zSnapshot).default([]),
-  settings: zSettings.default({ showUndoRedo: true }),
+  settings: zSettings.default({ showUndoRedo: true, maxSnapshots: 100 }),
   // Present on exported artifacts
   exportedAt: z.string().datetime().optional(),
 });

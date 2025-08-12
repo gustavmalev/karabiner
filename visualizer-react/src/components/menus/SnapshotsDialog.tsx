@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Button, Listbox, ListboxItem } from '@heroui/react';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Listbox, ListboxItem, Input } from '@heroui/react';
 import { Modal } from '../Modals/Modal';
 import { useStore } from '../../state/store';
 import { SnapshotDiff } from './SnapshotDiff';
@@ -21,9 +21,24 @@ export function SnapshotsDialog({ open, onClose }: { open: boolean; onClose: () 
   const revertToSnapshot = useStore((s) => s.revertToSnapshot);
   const deleteSnapshot = useStore((s) => s.deleteSnapshot);
 
-  const list = useMemo(() => [...snapshots].reverse(), [snapshots]);
+  const [query, setQuery] = useState('');
+  const pageSize = 50;
+  const listAll = useMemo(() => [...snapshots].reverse(), [snapshots]);
+  const listFiltered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return listAll;
+    return listAll.filter((s) => s.name.toLowerCase().includes(q));
+  }, [listAll, query]);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(listFiltered.length / pageSize));
+  useEffect(() => {
+    // Reset page if query changes or total pages shrink
+    if (page > totalPages) setPage(1);
+  }, [totalPages, page]);
+  const start = (page - 1) * pageSize;
+  const listPage = listFiltered.slice(start, start + pageSize);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = useMemo(() => list.find((s) => s.id === (selectedId || list[0]?.id)) || null, [list, selectedId]);
+  const selected = useMemo(() => listFiltered.find((s) => s.id === (selectedId || listFiltered[0]?.id)) || null, [listFiltered, selectedId]);
 
   function onRevert(id: string) {
     revertToSnapshot(id);
@@ -46,22 +61,34 @@ export function SnapshotsDialog({ open, onClose }: { open: boolean; onClose: () 
           ) : null}
         </div>
 
-        {list.length === 0 ? (
+        {listFiltered.length === 0 ? (
           <div className="text-sm text-default-500">No snapshots yet.</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px,1fr]">
             <div className="rounded-medium border border-default-200">
+              <div className="flex items-center gap-2 p-2 border-b border-default-200">
+                <Input
+                  size="sm"
+                  aria-label="Search snapshots"
+                  placeholder="Search snapshots..."
+                  value={query}
+                  onValueChange={(v) => { setQuery(v); setPage(1); }}
+                />
+                <div className="text-[11px] text-default-500 whitespace-nowrap px-1">
+                  {listFiltered.length} total
+                </div>
+              </div>
               <Listbox
                 aria-label="Snapshots"
                 selectionMode="single"
-                selectedKeys={selected ? new Set([selected.id]) : new Set()}
+                selectedKeys={(selected && listPage.some((x) => x.id === selected.id)) ? new Set([selected.id]) : new Set()}
                 onSelectionChange={(keys) => {
                   const id = Array.from(keys as Set<React.Key>)[0];
                   if (typeof id === 'string') setSelectedId(id);
                 }}
                 className="max-h-96 overflow-auto"
               >
-                {list.map((s) => (
+                {listPage.map((s) => (
                   <ListboxItem
                     key={s.id}
                     textValue={s.name}
@@ -89,6 +116,13 @@ export function SnapshotsDialog({ open, onClose }: { open: boolean; onClose: () 
                   </ListboxItem>
                 ))}
               </Listbox>
+              <div className="flex items-center justify-between gap-2 p-2 border-t border-default-200 text-[11px] text-default-600">
+                <div>Page {page} / {totalPages}</div>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="flat" isDisabled={page <= 1} onPress={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+                  <Button size="sm" variant="flat" isDisabled={page >= totalPages} onPress={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3">
