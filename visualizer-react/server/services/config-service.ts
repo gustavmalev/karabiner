@@ -7,10 +7,11 @@ import type { RulesConfig, CommandAction, LayerDef } from '../types/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// The client assets live one directory up at `visualizer-react/`
-export const VISUALIZER_DIR = path.resolve(__dirname, '..');
+// The client assets live two directories up at `visualizer-react/`
+export const VISUALIZER_DIR = path.resolve(__dirname, '..', '..');
 export const STATIC_DIR = VISUALIZER_DIR; // Serve the visualizer-react/ directory as the web root
 export const PORT = Number(process.env.PORT || 5178);
+// The repo root is one directory up from visualizer-react
 export const PROJECT_ROOT = path.resolve(VISUALIZER_DIR, '..');
 
 function resolveKarabinerJson() {
@@ -27,9 +28,11 @@ export const KARABINER_JSON = resolveKarabinerJson();
 export const USER_KARABINER_JSON = path.join(os.homedir(), '.config', 'karabiner', 'karabiner.json');
 
 function resolveRulesTs() {
-  if (process.env.RULES_TS) {
-    return path.resolve(process.env.RULES_TS);
+  const envPath = process.env.RULES_TS ? path.resolve(process.env.RULES_TS) : null;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
   }
+  // Fallback to repo root rules.ts
   return path.join(PROJECT_ROOT, 'rules.ts');
 }
 

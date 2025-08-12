@@ -110,7 +110,7 @@ export function KeyboardGrid() {
         />
       ))}
     </div>
-  ), (prev, next) => prev.keys === next.keys && prev.offsetUnits === next.offsetUnits), [classify, keyHandlers]);
+  ), (prev, next) => prev.keys === next.keys && prev.offsetUnits === next.offsetUnits), [classify, keyHandlers, dirtyByKey]);
 
   return (
     <div

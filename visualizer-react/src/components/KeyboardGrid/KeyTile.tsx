@@ -2,7 +2,7 @@ import { labelForKey } from '../../utils/keys';
 import { Button, Tooltip } from '@heroui/react';
 import { overlayMotion } from '../../ui/motion';
 import type { ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 type KeyTileProps = {
   code: string;
@@ -57,6 +57,45 @@ function KeyTileImpl({
     : dirty === 'change' ? { label: '~', cls: 'bg-warning text-black' }
     : dirty === 'move' ? { label: '↔', cls: 'bg-default-400 text-white' }
     : null;
+
+  // Subtle clean animation: when dirty clears, briefly fade out badge and ring
+  const prevDirtyRef = useRef<typeof dirty>(undefined);
+  const [justCleaned, setJustCleaned] = useState<null | 'add' | 'remove' | 'change' | 'move'>(null);
+  const [fadeOut, setFadeOut] = useState(false);
+  useEffect(() => {
+    const prev = prevDirtyRef.current;
+    if (prev && !dirty) {
+      // Trigger fade-out using the previous dirty type
+      setFadeOut(false);
+      setJustCleaned(prev);
+      // next tick start fade
+      const id = requestAnimationFrame(() => setFadeOut(true));
+      const t = setTimeout(() => {
+        setJustCleaned(null);
+        setFadeOut(false);
+      }, 220);
+      return () => {
+        cancelAnimationFrame(id);
+        clearTimeout(t);
+      };
+    }
+    prevDirtyRef.current = dirty;
+  }, [dirty]);
+
+  const prevRingClass = justCleaned === 'add'
+    ? 'ring-2 ring-success-500 ring-offset-2 ring-offset-background'
+    : justCleaned === 'remove'
+    ? 'ring-2 ring-danger-500 ring-offset-2 ring-offset-background'
+    : justCleaned === 'change'
+    ? 'ring-2 ring-warning-500 ring-offset-2 ring-offset-background'
+    : justCleaned === 'move'
+    ? 'ring-2 ring-default-500 ring-offset-2 ring-offset-background'
+    : '';
+  const prevBadge = justCleaned === 'add' ? { label: '+', cls: 'bg-success text-white' }
+    : justCleaned === 'remove' ? { label: '-', cls: 'bg-danger text-white' }
+    : justCleaned === 'change' ? { label: '~', cls: 'bg-warning text-black' }
+    : justCleaned === 'move' ? { label: '↔', cls: 'bg-default-400 text-white' }
+    : null;
   return (
     <div className={`relative inline-flex items-center rounded-medium ${ringClass}`}>
       <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0} motionProps={overlayMotion}>
@@ -91,6 +130,22 @@ function KeyTileImpl({
         >
           {badge.label}
         </span>
+      )}
+      {!badge && prevBadge && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full text-[10px] leading-4 text-center ring-1 ring-background ${prevBadge.cls}`}
+          style={{ opacity: fadeOut ? 0 : 1, transition: 'opacity 200ms ease' }}
+          aria-hidden="true"
+        >
+          {prevBadge.label}
+        </span>
+      )}
+      {/* Fading ring overlay when cleaned */}
+      {!dirty && justCleaned && prevRingClass && (
+        <span
+          className={`pointer-events-none absolute inset-0 rounded-medium ${prevRingClass}`}
+          style={{ opacity: fadeOut ? 0 : 1, transition: 'opacity 200ms ease' }}
+        />
       )}
       {onToggleLock && (
         <Tooltip content="Toggle lock" placement="top" motionProps={overlayMotion}>

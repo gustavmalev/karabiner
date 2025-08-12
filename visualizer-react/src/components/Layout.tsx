@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
 import { overlayMotion } from '../ui/motion';
 import { useStore } from '../state/store';
-import { saveConfig } from '../api/client';
+import { saveConfig, getConfig } from '../api/client';
 import { ImportDialog } from '../features/import/ImportDialog';
 import { FileMenu } from './menus/FileMenu';
 import { HistoryMenu } from './menus/HistoryMenu';
@@ -32,11 +32,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   async function onSave() {
     if (!config) return;
     try {
-      await saveConfig(config);
+      // Optimistic: clear dirty indicators immediately
       markSaved();
+      await saveConfig(config);
+      // Background sync with server-applied config (in case of normalization)
+      try {
+        const serverConfig = await getConfig();
+        useStore.setState({ lastSavedConfig: serverConfig, isDirty: false, lastSavedAt: Date.now() });
+      } catch {}
       if (resumeDialogOpen) closeResumeDialog();
     } catch (e) {
       console.error('Failed to save config', e);
+      // Revert optimistic clear if save failed
+      useStore.setState({ isDirty: true });
       // TODO: add toast later
     }
   }

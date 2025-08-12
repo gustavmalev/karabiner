@@ -3,39 +3,15 @@ import { KarabinerRules } from "./types";
 import { createHyperSubLayers, app, open, window, shell } from "./utils";
 
 const rules: KarabinerRules[] = [
-  // Define the Hyper key itself
   {
     description: "Hyper Key (⌃⌥⇧⌘)",
     manipulators: [
       {
         description: "Caps Lock -> Hyper Key",
-        from: {
-          key_code: "caps_lock",
-          modifiers: {
-            optional: ["any"],
-          },
-        },
-        to: [
-          {
-            set_variable: {
-              name: "hyper",
-              value: 1,
-            },
-          },
-        ],
-        to_after_key_up: [
-          {
-            set_variable: {
-              name: "hyper",
-              value: 0,
-            },
-          },
-        ],
-        to_if_alone: [
-          {
-            key_code: "escape",
-          },
-        ],
+        from: { key_code: "caps_lock", modifiers: { optional: ["any"] } },
+        to: [{ set_variable: { name: "hyper", value: 1 } }],
+        to_after_key_up: [{ set_variable: { name: "hyper", value: 0 } }],
+        to_if_alone: [{ key_code: "escape" }],
         type: "basic",
       },
     ],
@@ -110,17 +86,8 @@ fs.writeFileSync(
   "karabiner.json",
   JSON.stringify(
     {
-      global: {
-        show_in_menu_bar: false,
-      },
-      profiles: [
-        {
-          name: "Default",
-          complex_modifications: {
-            rules,
-          },
-        },
-      ],
+      global: { show_in_menu_bar: false },
+      profiles: [{ name: "Default", complex_modifications: { rules } }],
     },
     null,
     2
