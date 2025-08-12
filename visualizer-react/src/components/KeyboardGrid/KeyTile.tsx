@@ -80,6 +80,7 @@ function KeyTileImpl({
       };
     }
     prevDirtyRef.current = dirty;
+    return undefined;
   }, [dirty]);
 
   const prevRingClass = justCleaned === 'add'

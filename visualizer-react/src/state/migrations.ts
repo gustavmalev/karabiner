@@ -32,7 +32,7 @@ const migrations: Record<number, (input: Record<string, unknown>) => Record<stri
 export function migrateToLatest(raw: unknown): Persisted {
   // We accept an object with a schemaVersion field (number) and progressively migrate.
   const base: Record<string, unknown> = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const from = typeof base.schemaVersion === 'number' ? (base.schemaVersion as number) : SCHEMA_VERSION;
+  const from = typeof base['schemaVersion'] === 'number' ? (base['schemaVersion'] as number) : SCHEMA_VERSION;
 
   let current: Record<string, unknown> = { ...base };
   for (let v = from; v < SCHEMA_VERSION; v++) {
@@ -42,14 +42,16 @@ export function migrateToLatest(raw: unknown): Persisted {
   }
 
   // Ensure final schemaVersion matches latest
-  if (current.schemaVersion !== SCHEMA_VERSION) (current as Record<string, unknown>).schemaVersion = SCHEMA_VERSION;
+  if (current['schemaVersion'] !== SCHEMA_VERSION) (current as Record<string, unknown>)['schemaVersion'] = SCHEMA_VERSION;
 
   // Validate using zod and narrow the type
   const parsed = zPersisted.safeParse(current);
   if (!parsed.success) {
-    // Provide a concise error
+    // Provide a concise error with guards for strict mode
     const issue = parsed.error.issues[0];
-    throw new Error(`Persisted state invalid at ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    const where = issue?.path?.join('.') || '(root)';
+    const msg = issue?.message || parsed.error.message;
+    throw new Error(`Persisted state invalid at ${where}: ${msg}`);
   }
   return parsed.data;
 }

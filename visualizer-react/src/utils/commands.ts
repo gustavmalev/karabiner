@@ -57,8 +57,9 @@ export function parseTypeTextFrom(command?: Command):
     const action: Action = (command?.to?.[0] as Action) || {};
     const sc = action.shell_command || '';
     if (sc.startsWith('open -a ')) {
-      const m = sc.match(/open -a '(.+)\.app'/);
-      return { type: 'app', text: m ? m[1] : '' } as const;
+      const match = sc.match(/open -a '(.+)\.app'/);
+      const appName = match?.[1] ?? '';
+      return { type: 'app', text: appName } as const;
     }
     if (sc.startsWith('open -g raycast://extensions/raycast/window-management/')) {
       return { type: 'window', text: sc.split('/').pop() || '' } as const;
@@ -80,9 +81,9 @@ export function getCommandDescription(cmd?: Command): string {
   if (!cmd) return '';
   if (cmd.description) return cmd.description;
   if (cmd.to && cmd.to.length) {
-    const t = cmd.to[0];
-    if (t.shell_command) return `shell: ${t.shell_command}`;
-    if (t.key_code) return `${t.modifiers?.join('+') || ''}${t.modifiers?.length ? '+' : ''}${t.key_code}`;
+    const t = cmd.to?.[0];
+    if (t?.shell_command) return `shell: ${t.shell_command}`;
+    if (t?.key_code) return `${t.modifiers?.join('+') || ''}${t.modifiers?.length ? '+' : ''}${t.key_code}`;
   }
   return '';
 }

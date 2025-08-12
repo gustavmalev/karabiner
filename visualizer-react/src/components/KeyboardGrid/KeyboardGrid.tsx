@@ -22,7 +22,9 @@ export function KeyboardGrid() {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0].contentRect.width;
+      const first = entries[0];
+      if (!first) return;
+      const w = first.contentRect.width;
       setContainerWidth(w);
     });
     ro.observe(el);
@@ -105,8 +107,8 @@ export function KeyboardGrid() {
           key={code}
           code={code}
           state={classify(code)}
-          dirty={dirtyByKey[code]}
-          onClick={keyHandlers[code]}
+          {...(dirtyByKey[code] ? { dirty: dirtyByKey[code] } as const : {})}
+          {...(keyHandlers[code] ? { onClick: keyHandlers[code] } : {})}
         />
       ))}
     </div>
@@ -125,10 +127,10 @@ export function KeyboardGrid() {
       }
     >
       {/* Offsets in key units so they scale with size */}
-      <Row keys={filteredRows[0]} offsetUnits={0} />
-      <Row keys={filteredRows[1]} offsetUnits={0.5} />
-      <Row keys={filteredRows[2]} offsetUnits={1} />
-      <Row keys={filteredRows[3]} offsetUnits={1.5} />
+      <Row keys={filteredRows[0] ?? []} offsetUnits={0} />
+      <Row keys={filteredRows[1] ?? []} offsetUnits={0.5} />
+      <Row keys={filteredRows[2] ?? []} offsetUnits={1} />
+      <Row keys={filteredRows[3] ?? []} offsetUnits={1.5} />
     </div>
   );
 }

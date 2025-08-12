@@ -53,7 +53,7 @@ export function useAISuggestions() {
     const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const stop = new Set(['the','a','an','of','and','for','to','in','on','with','by','at']);
     const words = slug.split(/\s+/).filter((w) => w && !stop.has(w));
-    const initials = Array.from(new Set(words.map((w) => w[0]).filter((ch) => /[a-z]/.test(ch))));
+    const initials = Array.from(new Set(words.map((w) => w.charAt(0)).filter((ch) => /[a-z]/.test(ch))));
     const others: string[] = [];
     for (const w of words) {
       for (const ch of w.slice(1)) if (/[a-z]/.test(ch)) others.push(ch);
@@ -66,17 +66,22 @@ export function useAISuggestions() {
       const uti = (match as any)?.category || '';
       const tail = uti.split('.').pop() || '';
       const tokens = tail.split('-').filter(Boolean);
-      for (const t of tokens) if (t[0] && /[a-z]/.test(t[0])) categoryLetters.push(t[0]);
+      for (const t of tokens) {
+        const ch = t.charAt(0);
+        if (/[a-z]/.test(ch)) categoryLetters.push(ch);
+      }
     }
     const mnemonicCandidates = [...categoryLetters, ...initials, ...uniqueOthers];
 
     const mnemonicAvailable = mnemonicCandidates.filter((ch) => availableLetters.includes(ch));
     if (mnemonicAvailable.length) {
-      const choice = mnemonicAvailable.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best));
+      const head = mnemonicAvailable[0]!;
+      const rest = mnemonicAvailable.slice(1);
+      const choice = rest.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best), head);
       const isCat = categoryLetters.includes(choice);
       const isInitial = initials.includes(choice);
       const whyInitial = isCat ? 'category letter' : (isInitial ? 'first letter' : 'mnemonic letter');
-      const first = initials[0];
+      const first = initials[0] ?? '';
       const pre = first && choice !== first && !availableLetters.includes(first)
         ? `First letter ${first.toUpperCase()} is taken; `
         : '';
@@ -91,7 +96,9 @@ export function useAISuggestions() {
     }
 
     if (availableLetters.length) {
-      const choice = availableLetters.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best));
+      const head = availableLetters[0]!;
+      const rest = availableLetters.slice(1);
+      const choice = rest.reduce((best, ch) => (comfortRank(ch) < comfortRank(best) ? ch : best), head);
       return { key: choice, reason: `No mnemonic or category letter free; picked comfortable letter ${choice.toUpperCase()}.` };
     }
 

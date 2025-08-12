@@ -206,7 +206,10 @@ export async function getOrCreateIconPNGBuffer(appPath: string, size = 64): Prom
       try {
         const files = fs.readdirSync(diskCacheDir).filter((f) => f.endsWith('.png'));
         if (files.length) {
-          const full = files.map((f) => ({ f, t: fs.statSync(path.join(diskCacheDir, f)).mtimeMs })).sort((a, b) => b.t - a.t)[0].f;
+          const latest = files
+            .map((f) => ({ f, t: fs.statSync(path.join(diskCacheDir, f)).mtimeMs }))
+            .sort((a, b) => b.t - a.t)[0]!;
+          const full = latest.f;
           fs.copyFileSync(path.join(diskCacheDir, full), outPng);
           const buf = await fs.promises.readFile(outPng);
           memIconLRU.set(cacheKey, { buf, sourceMTime });
@@ -235,7 +238,11 @@ export async function enrichApp(app: AppBase): Promise<AppInfo> {
   const category = plist?.LSApplicationCategoryType as string | undefined;
   const categoryLabel = categoryLabelFromUTI(category);
   const iconUrl = `/api/app-icon?path=${encodeURIComponent(app.path)}`;
-  return { name, path: app.path, bundleId, category, categoryLabel, iconUrl };
+  const base: AppInfo = { name, path: app.path, iconUrl } as AppInfo;
+  const withBundle = bundleId !== undefined ? { ...base, bundleId } : base;
+  const withCategory = category !== undefined ? { ...withBundle, category } : withBundle;
+  const withCategoryLabel = categoryLabel !== undefined ? { ...withCategory, categoryLabel } : withCategory;
+  return withCategoryLabel;
 }
 
 export async function enrichAppsBatch(apps: AppBase[], concurrency = 3): Promise<AppInfo[]> {

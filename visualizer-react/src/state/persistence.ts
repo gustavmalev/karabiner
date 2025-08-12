@@ -78,7 +78,9 @@ export async function importFullState(file: File, mode: ImportMode = 'replace'):
   const res = zPersisted.safeParse(finalPersisted);
   if (!res.success) {
     const issue = res.error.issues[0];
-    throw new Error(`Final state invalid at ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+    const where = issue?.path?.join('.') || '(root)';
+    const msg = issue?.message || res.error.message;
+    throw new Error(`Final state invalid at ${where}: ${msg}`);
   }
   // Backup current state (if any) before overwriting
   try {

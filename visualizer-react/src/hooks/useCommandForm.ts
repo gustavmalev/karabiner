@@ -2,6 +2,7 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import {useStore} from '../state/store';
 import {numberRow, topRow, homeRow, bottomRow, labelForKey} from '../utils/keys';
 import {windowCommandItems} from '../data/windowCommands';
+import type { AppItem } from '../components/LayerDetail/CommandTypes/AppCommandForm';
 
 export type CmdType = 'app' | 'window' | 'raycast' | 'shell' | 'key';
 
@@ -38,7 +39,15 @@ export function useCommandForm(params: {
     label: labelForKey(code),
     disabled: takenInnerKeys.includes(code.toLowerCase()),
   })), [allKeyCodes, takenInnerKeys]);
-  const appItems = useMemo(() => apps.map(a => ({ id: a.name, label: a.name, iconUrl: a.iconUrl, categoryLabel: a.categoryLabel })), [apps]);
+  const appItems = useMemo<AppItem[]>(() => apps.map(a => {
+    const item: { id: string; label: string } & Partial<{ iconUrl: string; categoryLabel: string }> = {
+      id: a.name,
+      label: a.name,
+    };
+    if (a.iconUrl) item.iconUrl = a.iconUrl;
+    if ((a as any).categoryLabel) item.categoryLabel = (a as any).categoryLabel as string;
+    return item;
+  }), [apps]);
 
   // window helpers
   const [windowQuery, setWindowQuery] = useState<string>('');
@@ -82,7 +91,9 @@ export function useCommandForm(params: {
       else if (/^Digit[0-9]$/.test(code)) key_code = code.slice(5);
       else if (/^F[0-9]{1,2}$/.test(code)) key_code = code.toLowerCase();
     }
-    return { key_code, modifiers: mods };
+    const out: KeyPress = { modifiers: mods };
+    if (key_code) out.key_code = key_code;
+    return out;
   }, []);
   const isModifierOnly = useCallback((e: KeyboardEvent) => ['ShiftLeft','ShiftRight','AltLeft','AltRight','MetaLeft','MetaRight','ControlLeft','ControlRight'].includes(e.code), []);
   useEffect(() => {

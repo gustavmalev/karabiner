@@ -38,8 +38,8 @@ export function diffConfigs(current: Config | null | undefined, incoming: Config
       continue;
     }
     if (a.type === 'sublayer' && b.type === 'sublayer') {
-      const aCmds = a.commands || {};
-      const bCmds = b.commands || {};
+      const aCmds: Record<KeyCode, Command> = a.commands ?? ({} as Record<KeyCode, Command>);
+      const bCmds: Record<KeyCode, Command> = b.commands ?? ({} as Record<KeyCode, Command>);
       const aKeys = new Set(Object.keys(aCmds));
       const bKeys = new Set(Object.keys(bCmds));
       const added = [...bKeys].filter((x) => !aKeys.has(x));
@@ -106,15 +106,14 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
     const b = incoming.layers[key];
     if (!b) continue;
     if (b.type === 'command') {
-      changedLayers.push({ key, type: 'command', typeChanged: true, from: undefined, to: b });
+      changedLayers.push({ key, type: 'command', typeChanged: true, to: b });
     } else if (b.type === 'sublayer') {
-      const bCmds = b.commands || {};
-      const added = Object.keys(bCmds).map((k) => ({ key: k as KeyCode, to: bCmds[k] }));
+      const bCmds: Record<KeyCode, Command> = b.commands ?? ({} as Record<KeyCode, Command>);
+      const added = Object.keys(bCmds).map((k) => ({ key: k as KeyCode, to: bCmds[k]! }));
       changedLayers.push({
         key,
         type: 'sublayer',
         typeChanged: true,
-        from: undefined,
         to: b,
         sublayer: { added, removed: [], changed: [], moved: [] },
       });
@@ -126,16 +125,15 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
     const a = current?.layers?.[key];
     if (!a) continue;
     if (a.type === 'command') {
-      changedLayers.push({ key, type: 'command', typeChanged: true, from: a, to: undefined });
+      changedLayers.push({ key, type: 'command', typeChanged: true, from: a });
     } else if (a.type === 'sublayer') {
-      const aCmds = a.commands || {};
-      const removed = Object.keys(aCmds).map((k) => ({ key: k as KeyCode, from: aCmds[k] }));
+      const aCmds: Record<KeyCode, Command> = a.commands ?? ({} as Record<KeyCode, Command>);
+      const removed = Object.keys(aCmds).map((k) => ({ key: k as KeyCode, from: aCmds[k]! }));
       changedLayers.push({
         key,
         type: 'sublayer',
         typeChanged: true,
         from: a,
-        to: undefined,
         sublayer: { added: [], removed, changed: [], moved: [] },
       });
     }
@@ -146,7 +144,14 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
     const b = incoming.layers[key];
     if (!a || !b || a.type !== b.type) {
       layersChanged.push(key);
-      changedLayers.push({ key, type: (b?.type as any) || 'command', typeChanged: true, from: a, to: b } as any);
+      const entry = {
+        key,
+        type: (b?.type ?? a?.type ?? 'command'),
+        typeChanged: true,
+        ...(a ? { from: a } : {}),
+        ...(b ? { to: b } : {}),
+      } as const;
+      changedLayers.push(entry as any);
       continue;
     }
 
@@ -188,9 +193,9 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
         const bKeysForSig = [...(addedBySig.get(s) || [])];
         const count = Math.min(aKeysForSig.length, bKeysForSig.length);
         for (let i = 0; i < count; i++) {
-          const fromKey = aKeysForSig[i];
-          const toKey = bKeysForSig[i];
-          moved.push({ from: fromKey, to: toKey, command: aCmds[fromKey] });
+          const fromKey = aKeysForSig[i]!;
+          const toKey = bKeysForSig[i]!;
+          moved.push({ from: fromKey, to: toKey, command: aCmds[fromKey]! });
         }
       }
       // Remove moved keys from added/removed lists
@@ -208,9 +213,9 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
           from: a,
           to: b,
           sublayer: {
-            added: addedKeys.map((k) => ({ key: k, to: bCmds[k] })),
-            removed: removedKeys.map((k) => ({ key: k, from: aCmds[k] })),
-            changed: changedInner.map((k) => ({ key: k, from: aCmds[k], to: bCmds[k] })),
+            added: addedKeys.map((k) => ({ key: k, to: bCmds[k]! })),
+            removed: removedKeys.map((k) => ({ key: k, from: aCmds[k]! })),
+            changed: changedInner.map((k) => ({ key: k, from: aCmds[k]!, to: bCmds[k]! })),
             moved,
           },
         });

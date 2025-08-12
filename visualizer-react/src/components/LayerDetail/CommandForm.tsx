@@ -32,7 +32,12 @@ export function CommandForm(props: {
     windowQuery, setWindowQuery, getWindowLabel,
     isRecording, setIsRecording, keyPress, setKeyPress, recordedLabel,
     isAIMode, canSave,
-  } = useCommandForm({ initial, takenKeys, mode, isKeyLevel });
+  } = useCommandForm({
+    takenKeys,
+    mode,
+    ...(typeof isKeyLevel === 'boolean' ? { isKeyLevel } : {}),
+    ...(initial ? { initial } : {}),
+  });
 
   const {
     hasAIKey,
@@ -190,8 +195,8 @@ export function CommandForm(props: {
               {(item: KeyOption) => (
                 <AutocompleteItem
                   key={item.id}
-                  isDisabled={item.disabled}
-                  description={item.disabled ? 'Already taken' : undefined}
+                  {...(item.disabled ? { isDisabled: true } : {})}
+                  {...(item.disabled ? { description: 'Already taken' } : {})}
                 >
                   {item.label}
                 </AutocompleteItem>

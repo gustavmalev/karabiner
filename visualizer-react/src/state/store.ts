@@ -87,7 +87,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
   markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null, lastSavedAt: Date.now() }),
   undo: () => set((prev: StoreState) => {
     if (prev.history.length === 0) return {} as StoreState;
-    const last = prev.history[prev.history.length - 1];
+    const last = prev.history[prev.history.length - 1]!;
     const newHistory = prev.history.slice(0, -1);
     const newFuture = [...prev.future, { config: prev.config } as StoreSnapshot];
     const dirty = !deepEqual(last.config, get().lastSavedConfig);
@@ -100,7 +100,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
   }),
   redo: () => set((prev: StoreState) => {
     if (prev.future.length === 0) return {} as StoreState;
-    const last = prev.future[prev.future.length - 1];
+    const last = prev.future[prev.future.length - 1]!;
     const newFuture = prev.future.slice(0, -1);
     const newHistory = [...prev.history, { config: prev.config } as StoreSnapshot];
     if (newHistory.length > prev.historyLimit) newHistory.shift();

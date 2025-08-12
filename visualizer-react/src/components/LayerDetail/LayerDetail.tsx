@@ -51,7 +51,9 @@ export function LayerDetail() {
 
   const onSaveCommand = (values: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => {
     if (!key) return;
-    const cmd: Command = buildCommandFrom(values.type, values.text, { ignore: values.ignore });
+    const extra: { ignore?: boolean } = {};
+    if (values.ignore !== undefined) extra.ignore = values.ignore;
+    const cmd: Command = buildCommandFrom(values.type, values.text, extra);
     const prev: Record<string, Layer> = (config?.layers || {}) as Record<string, Layer>;
     const isKeyLevel = showCmdModal?.kind === 'key' || (prev[key] && (prev[key] as Layer).type === 'command');
     if (isKeyLevel) {
@@ -93,7 +95,7 @@ export function LayerDetail() {
     return map;
   }, [sublayerCommands]);
 
-  const { keyHandlers } = useKeySelection({ rows, baseKey: key, sublayerCommands, setShowCmdModal });
+  const { keyHandlers } = useKeySelection({ rows, baseKey: key, ...(sublayerCommands ? { sublayerCommands } : {}), setShowCmdModal });
 
   const onDeleteInner = (ik: string) => {
     if (!key || !config || !sublayerCommands) return;
@@ -112,6 +114,40 @@ export function LayerDetail() {
       setConfig({ ...config, layers: newLayers });
     }
   };
+
+  // Build CommandForm initial value. Only pass the prop when defined to satisfy exactOptionalPropertyTypes.
+  const cmdFormInitial = useMemo(() => {
+    if (!showCmdModal) return undefined;
+    if (showCmdModal.mode === 'add') {
+      if (showCmdModal.kind === 'key') {
+        return { type: 'app' as CmdType, text: '', ignore: false };
+      }
+      return showCmdModal.prefill ? { type: 'app' as CmdType, text: '', ignore: false, innerKey: showCmdModal.prefill } : undefined;
+    }
+    if (showCmdModal.mode === 'edit' && showCmdModal.cmdKey) {
+      const cmd = sublayerCommands?.[showCmdModal.cmdKey];
+      if (!cmd) return undefined;
+      const parsed = parseTypeTextFrom(cmd);
+      return {
+        type: parsed.type as CmdType,
+        text: parsed.text || '',
+        ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
+        innerKey: showCmdModal.cmdKey,
+      };
+    }
+    if (showCmdModal.mode === 'edit' && showCmdModal.kind === 'key' && key) {
+      const node = config?.layers?.[key];
+      if (node && (node as Layer).type === 'command') {
+        const parsed = parseTypeTextFrom((node as Extract<Layer, { type: 'command' }>).command as Command);
+        return {
+          type: parsed.type as CmdType,
+          text: parsed.text || '',
+          ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
+        };
+      }
+    }
+    return undefined;
+  }, [showCmdModal, sublayerCommands, key, config]);
 
   return (
     <Card className="border">
@@ -180,7 +216,7 @@ export function LayerDetail() {
         {key && layer && layer.type === 'sublayer' && (
           <KeyboardLayoutGrid
             baseKey={key}
-            sublayerCommands={sublayerCommands}
+            {...(sublayerCommands ? { sublayerCommands } : {})}
             tooltipByKey={tooltipByKey}
             keyHandlers={keyHandlers}
           />
@@ -207,38 +243,7 @@ export function LayerDetail() {
             }}
             takenKeys={takenKeysMemo}
             baseKey={key}
-            initial={useMemo(() => {
-              if (!showCmdModal) return undefined;
-              if (showCmdModal.mode === 'add') {
-                if (showCmdModal.kind === 'key') {
-                  return { type: 'app' as CmdType, text: '', ignore: false };
-                }
-                return showCmdModal.prefill ? { type: 'app' as CmdType, text: '', ignore: false, innerKey: showCmdModal.prefill } : undefined;
-              }
-              if (showCmdModal.mode === 'edit' && showCmdModal.cmdKey) {
-                const cmd = sublayerCommands?.[showCmdModal.cmdKey];
-                if (!cmd) return undefined;
-                const parsed = parseTypeTextFrom(cmd);
-                return {
-                  type: parsed.type as CmdType,
-                  text: parsed.text || '',
-                  ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
-                  innerKey: showCmdModal.cmdKey,
-                };
-              }
-              if (showCmdModal.mode === 'edit' && showCmdModal.kind === 'key' && key) {
-                const node = config?.layers?.[key];
-                if (node && (node as Layer).type === 'command') {
-                  const parsed = parseTypeTextFrom((node as Extract<Layer, { type: 'command' }>).command as Command);
-                  return {
-                    type: parsed.type as CmdType,
-                    text: parsed.text || '',
-                    ignore: parsed.type === 'raycast' ? (parsed.ignoreRaycast ?? false) : false,
-                  };
-                }
-              }
-              return undefined;
-            }, [showCmdModal, sublayerCommands, key, config])}
+            {...(cmdFormInitial ? { initial: cmdFormInitial } : {})}
             mode={showCmdModal?.mode || 'add'}
             isKeyLevel={showCmdModal?.kind === 'key'}
             isBlocked={!!(key && !layer && blocked[key])}

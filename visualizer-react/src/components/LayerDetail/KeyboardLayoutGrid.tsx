@@ -21,7 +21,9 @@ export function KeyboardLayoutGrid(props: {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      setContainerWidth(entries[0].contentRect.width);
+      const first = entries[0];
+      if (!first) return;
+      setContainerWidth(first.contentRect.width);
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -92,10 +94,10 @@ export function KeyboardLayoutGrid(props: {
                 key={code}
                 code={lower}
                 state={stateForKey}
-                dirty={dirtyByInnerKey[lower]}
+                {...(dirtyByInnerKey[lower] ? { dirty: dirtyByInnerKey[lower] } as const : {})}
                 tooltipContent={tooltipContent}
                 tooltipDelay={0}
-                onClick={keyHandlers[lower]}
+                {...(keyHandlers[lower] ? { onClick: keyHandlers[lower] } : {})}
               />
             );
           })}

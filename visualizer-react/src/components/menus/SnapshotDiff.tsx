@@ -80,16 +80,24 @@ export function SnapshotDiff({ base, target }: { base: Config | null | undefined
                 <Key k={c.key} />
                 {c.typeChanged ? <Pill color="warning">type changed</Pill> : <Pill color="primary">{c.type}</Pill>}
               </div>
-              {c.typeChanged && (
-                <div className="mb-2">
-                  <CommandArrow from={c.from?.type === 'command' ? c.from.command : undefined} to={c.to?.type === 'command' ? c.to.command : undefined} />
-                </div>
-              )}
-              {c.type === 'command' && !c.typeChanged && (
-                <div className="mb-1">
-                  <CommandArrow from={c.from?.type === 'command' ? c.from.command : undefined} to={c.to?.type === 'command' ? c.to.command : undefined} />
-                </div>
-              )}
+              {c.typeChanged && (() => {
+                const fromCmd = c.from?.type === 'command' ? c.from.command : undefined;
+                const toCmd = c.to?.type === 'command' ? c.to.command : undefined;
+                return (
+                  <div className="mb-2">
+                    <CommandArrow {...(fromCmd ? { from: fromCmd } : {})} {...(toCmd ? { to: toCmd } : {})} />
+                  </div>
+                );
+              })()}
+              {c.type === 'command' && !c.typeChanged && (() => {
+                const fromCmd = c.from?.type === 'command' ? c.from.command : undefined;
+                const toCmd = c.to?.type === 'command' ? c.to.command : undefined;
+                return (
+                  <div className="mb-1">
+                    <CommandArrow {...(fromCmd ? { from: fromCmd } : {})} {...(toCmd ? { to: toCmd } : {})} />
+                  </div>
+                );
+              })()}
               {c.type === 'sublayer' && c.sublayer && (
                 <div className="space-y-2">
                   {c.sublayer.moved.length > 0 && (

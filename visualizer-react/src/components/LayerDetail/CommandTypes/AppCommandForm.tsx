@@ -31,7 +31,7 @@ export function AppCommandForm(props: {
       }}
       startContent={selected?.iconUrl ? (
         <span className="inline-flex h-5 w-5 items-center justify-center shrink-0">
-          <Avatar src={selected.iconUrl} radius="sm" className="h-5 w-5" />
+          <Avatar radius="sm" className="h-5 w-5" {...(selected.iconUrl ? { src: selected.iconUrl } : {})} />
         </span>
       ) : null}
       classNames={{
@@ -66,14 +66,18 @@ export function AppCommandForm(props: {
         <AutocompleteItem key={item.id} textValue={item.label}>
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2.5 min-h-[44px]">
-              <Avatar
-                src={item.iconUrl}
-                name={item.label}
-                size="sm"
-                radius="sm"
-                className="shrink-0 bg-transparent overflow-hidden h-5 w-5"
-                imgProps={{ loading: 'lazy', decoding: 'async' }}
-              />
+              {item.iconUrl ? (
+                <Avatar
+                  src={item.iconUrl}
+                  name={item.label}
+                  size="sm"
+                  radius="sm"
+                  className="shrink-0 bg-transparent overflow-hidden h-5 w-5"
+                  imgProps={{ loading: 'lazy', decoding: 'async' }}
+                />
+              ) : (
+                <span className="h-5 w-5 inline-block" aria-hidden="true" />
+              )}
               <div className="flex flex-col leading-tight">
                 <span className="text-small text-default-800">{item.label}</span>
                 {item.categoryLabel ? (

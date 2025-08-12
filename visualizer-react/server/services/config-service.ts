@@ -229,7 +229,7 @@ export function analyze(json: any) {
   return {
     base: {
       sublayerKeys: Array.from(sublayerKeys).sort(),
-      customKeys: Object.keys(baseCustom).sort().map((k) => ({ key: k, description: baseCustom[k].description, detail: baseCustom[k].detail })),
+      customKeys: Object.keys(baseCustom).sort().map((k) => ({ key: k, description: baseCustom[k]!.description, detail: baseCustom[k]!.detail })),
       fallbackKeys: Array.from(baseFallback).sort(),
     },
     layers,

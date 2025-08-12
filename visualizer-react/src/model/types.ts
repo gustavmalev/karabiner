@@ -32,7 +32,7 @@ export type WindowCommand = {
 export type RaycastCommand = {
   type: 'raycast';
   deeplink: string; // e.g., "raycast://extensions/..."
-  ignore?: boolean; // whether to ignore in some contexts
+  ignore?: boolean | undefined; // whether to ignore in some contexts
 };
 
 export type ShellCommand = {
@@ -42,7 +42,7 @@ export type ShellCommand = {
 
 export type KeyPressCommand = {
   type: 'key';
-  to: { key_code: string; modifiers?: string[] };
+  to: { key_code: string; modifiers?: string[] | undefined };
 };
 
 export type Command =

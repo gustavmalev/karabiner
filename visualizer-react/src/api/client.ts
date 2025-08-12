@@ -1,28 +1,34 @@
 import type { AppInfo, Config, Data } from '../types';
-
-async function json<T>(r: Response): Promise<T> {
-  if (!r.ok) throw new Error(`${r.url} ${r.status}`);
-  return r.json();
-}
+import { AppsResponseSchema, ConfigSchema, DataSchema, SaveConfigResponseSchema } from '../types/api';
+import { assertValid, parseJsonResponse } from '../utils/validation';
 
 export async function getData(): Promise<Data> {
-  return json(await fetch('/api/data'));
+  const r = await fetch('/api/data');
+  return parseJsonResponse(r, DataSchema, 'GET /api/data');
 }
 
 export async function getConfig(): Promise<Config> {
-  return json(await fetch('/api/config'));
+  const r = await fetch('/api/config');
+  return parseJsonResponse(r, ConfigSchema, 'GET /api/config');
 }
 
 export async function saveConfig(config: Config): Promise<void> {
+  // Validate input before sending
+  const safe = assertValid(ConfigSchema, config, 'saveConfig input');
   const r = await fetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
+    body: JSON.stringify(safe),
   });
-  if (!r.ok) throw new Error('saveConfig failed');
+  const resp = await parseJsonResponse(r, SaveConfigResponseSchema, 'POST /api/config');
+  if (resp.success !== true) {
+    const msg = resp.error || resp.message || 'saveConfig failed';
+    throw new Error(msg);
+  }
 }
 
 export async function getApps(): Promise<AppInfo[]> {
-  return json(await fetch('/api/apps'));
+  const r = await fetch('/api/apps');
+  return parseJsonResponse(r, AppsResponseSchema, 'GET /api/apps');
 }
 
