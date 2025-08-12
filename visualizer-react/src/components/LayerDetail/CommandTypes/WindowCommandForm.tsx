@@ -32,7 +32,7 @@ export function WindowCommandForm(props: {
         setQuery(label);
       }}
       classNames={{
-        base: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0 [&_[data-slot=inner-wrapper]]:!items-center [&_[data-slot=inner-wrapper]]:gap-1',
+        base: 'outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 ring-offset-0',
         listbox: 'outline-none',
         listboxWrapper: 'outline-none ring-0 border-0',
         popoverContent: 'outline-none border-0 ring-0',

@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { PORT, KARABINER_JSON, USER_KARABINER_JSON, RULES_TS, VISUALIZER_DIR, readKarabinerJson, parseRulesConfig, generateRulesTs, writeRulesTs } from './config.mjs';
 import { analyze } from './analyze.mjs';
 import { serveStatic } from './static.mjs';
+import { getIconCacheDir, LRUCache, pruneByMTime, getDirSizeBytes } from './cache-utils.mjs';
 
 const PROJECT_ROOT = path.resolve(VISUALIZER_DIR, '..');
 
@@ -97,16 +98,44 @@ async function withRetries(fn, retries = 2, baseDelayMs = 120) {
 // App list cache (enriched)
 const appListCache = makeTTLCache(APP_LIST_TTL_MS);
 
-// Icon cache keyed by hash(appPath)+size
-const iconCache = new Map(); // key -> { pngPath, sourceMTime }
-const inFlightIconTasks = new Map(); // key -> Promise<string|null>
-let iconCacheHits = 0;
-let iconCacheMisses = 0;
+// Persistent disk cache and in-memory LRU for icons
+const MEM_LRU_MAX_ENTRIES = Number(process.env.ICON_MEM_LRU_MAX_ENTRIES || 512);
+const MEM_LRU_MAX_BYTES = Number(process.env.ICON_MEM_LRU_MAX_MB || 64) * 1024 * 1024;
+const DISK_CACHE_MAX_BYTES = Number(process.env.ICON_DISK_CACHE_MAX_MB || 100) * 1024 * 1024;
+
+const memIconLRU = new LRUCache({
+  maxEntries: MEM_LRU_MAX_ENTRIES,
+  maxSizeBytes: MEM_LRU_MAX_BYTES,
+  sizeEstimator: (v) => (v?.buf ? v.buf.length : 1)
+});
+const inFlightIconTasks = new Map(); // key -> Promise<Buffer|null>
+const diskCacheDir = getIconCacheDir();
+ensureDir(diskCacheDir);
+
+let memHits = 0, memMisses = 0;
+let diskHits = 0, diskMisses = 0;
+let iconGenerations = 0;
+
+let lastPruneCheck = 0;
+async function maybePruneDiskCache(force = false) {
+  const now = Date.now();
+  if (!force && now - lastPruneCheck < 15000) return; // throttle to every 15s
+  lastPruneCheck = now;
+  try {
+    const size = await getDirSizeBytes(diskCacheDir);
+    if (size > DISK_CACHE_MAX_BYTES) {
+      const r = await pruneByMTime(diskCacheDir, DISK_CACHE_MAX_BYTES, 0.9);
+      console.log(`[cache] prune: files=${r.prunedFiles} bytes=${r.prunedBytes} final=${r.finalSize}`);
+    }
+  } catch (e) {
+    console.warn('[cache] prune check failed:', e?.message || e);
+  }
+}
 
 function logCacheMetrics() {
   const m = appListCache.metrics();
   console.log(
-    `[perf] apps cache hits=${m.hits} misses=${m.misses} | icon hits=${iconCacheHits} misses=${iconCacheMisses}`
+    `[perf] apps hits=${m.hits} misses=${m.misses} | mem hits=${memHits} misses=${memMisses} | disk hits=${diskHits} misses=${diskMisses} | gens=${iconGenerations}`
   );
 }
 
@@ -224,28 +253,25 @@ function statMTimeSafe(p) {
   try { return fs.statSync(p).mtimeMs; } catch { return 0; }
 }
 
-// Convert icns to png and cache in tmp (with in-memory cache, invalidation, retries and concurrency limiting)
+// Convert icns to png and cache to persistent disk with memory LRU
 const iconLimiter = pLimit(3);
-async function getOrCreateIconPng(appPath, size = 64) {
-  const tmp = path.join(os.tmpdir(), 'karabiner-app-icons');
-  ensureDir(tmp);
+async function getOrCreateIconPNGBuffer(appPath, size = 64) {
   const keyBase = `${hashPath(appPath)}-${size}`;
-  const key = `${keyBase}.png`;
-  const outPng = path.join(tmp, key);
+  const outPng = path.join(diskCacheDir, `${keyBase}.png`);
 
   // Determine current source signature
   const plist = await readInfoPlistJSON(appPath);
   const icns = findIcnsForApp(plist, appPath);
   const sourceMTime = icns ? statMTimeSafe(icns) : statMTimeSafe(path.join(appPath, 'Contents'));
 
-  // Check in-memory cache
+  // Memory LRU first
   const cacheKey = `${appPath}|${size}`;
-  const cached = iconCache.get(cacheKey);
-  if (cached && cached.sourceMTime === sourceMTime && fs.existsSync(cached.pngPath)) {
-    iconCacheHits++;
-    return cached.pngPath;
+  const mem = memIconLRU.get(cacheKey);
+  if (mem && mem.sourceMTime === sourceMTime && mem.buf) {
+    memHits++;
+    return mem.buf;
   }
-  iconCacheMisses++;
+  memMisses++;
 
   // De-duplicate concurrent generations
   const inFlight = inFlightIconTasks.get(cacheKey);
@@ -254,22 +280,34 @@ async function getOrCreateIconPng(appPath, size = 64) {
   const task = iconLimiter(async () => {
     // Disk cache short-circuit
     if (fs.existsSync(outPng)) {
-      iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
-      return outPng;
+      try {
+        const st = await fs.promises.stat(outPng);
+        if (st.mtimeMs >= sourceMTime) {
+          const buf = await fs.promises.readFile(outPng);
+          memIconLRU.set(cacheKey, { buf, sourceMTime });
+          diskHits++;
+          return buf;
+        }
+        // stale on disk; continue to regenerate
+      } catch {
+        // fall through to regenerate
+      }
     }
+    diskMisses++;
 
+    // Try sips first with retries
     if (icns) {
-      // Try sips first with retries
       const cmd = `sips -s format png ${JSON.stringify(icns)} --out ${JSON.stringify(outPng)}`;
       try {
         await withRetries(() =>
-          new Promise((resolve, reject) =>
-            exec(cmd, (err) => (err ? reject(err) : resolve()))
-          )
+          new Promise((resolve, reject) => exec(cmd, (err) => (err ? reject(err) : resolve())))
         );
         if (fs.existsSync(outPng)) {
-          iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
-          return outPng;
+          const buf = await fs.promises.readFile(outPng);
+          memIconLRU.set(cacheKey, { buf, sourceMTime });
+          iconGenerations++;
+          await maybePruneDiskCache(false);
+          return buf;
         }
       } catch (_) {
         // fallthrough to QuickLook
@@ -277,30 +315,30 @@ async function getOrCreateIconPng(appPath, size = 64) {
     }
 
     // Fallback: QuickLook thumbnail of the app bundle
-    const qlCmd = `qlmanage -t -s ${size} -o ${JSON.stringify(tmp)} ${JSON.stringify(appPath)}`;
+    const qlCmd = `qlmanage -t -s ${size} -o ${JSON.stringify(diskCacheDir)} ${JSON.stringify(appPath)}`;
     try {
-      await withRetries(() =>
-        new Promise((resolve) => exec(qlCmd, () => resolve()))
-      );
-      // Find most recent png in tmp for this app hash
+      await withRetries(() => new Promise((resolve) => exec(qlCmd, () => resolve())));
+      // Find most recent png in cache dir
       try {
-        const files = fs.readdirSync(tmp).filter((f) => f.endsWith('.png'));
+        const files = fs.readdirSync(diskCacheDir).filter((f) => f.endsWith('.png'));
         if (files.length) {
           const full = files
-            .map((f) => ({ f, t: fs.statSync(path.join(tmp, f)).mtimeMs }))
+            .map((f) => ({ f, t: fs.statSync(path.join(diskCacheDir, f)).mtimeMs }))
             .sort((a, b) => b.t - a.t)[0].f;
-          fs.copyFileSync(path.join(tmp, full), outPng);
-          iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
-          return outPng;
+          fs.copyFileSync(path.join(diskCacheDir, full), outPng);
+          const buf = await fs.promises.readFile(outPng);
+          memIconLRU.set(cacheKey, { buf, sourceMTime });
+          iconGenerations++;
+          await maybePruneDiskCache(false);
+          return buf;
         }
       } catch {}
     } catch {}
 
     return null;
-  })
-    .finally(() => {
-      inFlightIconTasks.delete(cacheKey);
-    });
+  }).finally(() => {
+    inFlightIconTasks.delete(cacheKey);
+  });
 
   inFlightIconTasks.set(cacheKey, task);
   return task;
@@ -309,7 +347,7 @@ async function getOrCreateIconPng(appPath, size = 64) {
 // Batch icon processing with concurrency limits
 async function getOrCreateIconsBatch(appPaths, size = 64, concurrency = 3) {
   const limiter = pLimit(concurrency);
-  return Promise.all(appPaths.map((p) => limiter(() => getOrCreateIconPng(p, size))));
+  return Promise.all(appPaths.map((p) => limiter(() => getOrCreateIconPNGBuffer(p, size))));
 }
 
 async function enrichApp(app) {
@@ -378,9 +416,8 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
-        const png = await getOrCreateIconPng(appPath, size);
-        if (png && fs.existsSync(png)) {
-          const buf = fs.readFileSync(png);
+        const buf = await getOrCreateIconPNGBuffer(appPath, size);
+        if (buf && Buffer.isBuffer(buf)) {
           res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }).end(buf);
         } else {
           res.writeHead(404).end();
@@ -498,4 +535,9 @@ server.listen(PORT, () => {
   console.log(`Karabiner Configuration Editor running at http://localhost:${PORT}`);
   console.log(`Reading data from: ${KARABINER_JSON}`);
   console.log(`Managing configuration: ${RULES_TS}`);
+  console.log(`[cache] icon disk dir: ${diskCacheDir}`);
+  console.log(`[cache] mem LRU: maxEntries=${MEM_LRU_MAX_ENTRIES} maxBytes=${MEM_LRU_MAX_BYTES}`);
+  console.log(`[cache] disk maxBytes=${DISK_CACHE_MAX_BYTES}`);
+  // Fire and forget initial prune
+  maybePruneDiskCache(true).catch(() => {});
 });
