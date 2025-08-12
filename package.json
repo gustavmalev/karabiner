@@ -13,11 +13,11 @@
   },
   "scripts": {
     "build": "tsm rules.ts",
-    "watch": "nodemon --exec yarn build -e ts",
+    "watch": "nodemon --exec npm run build -e ts",
+    "kill-ports": "sh -c \"for p in 5178 5173 5174 5175; do P=\\$(lsof -t -iTCP:$p -sTCP:LISTEN 2>/dev/null); if [ -n \\\"$P\\\" ]; then echo Killing $P on $p; kill $P; fi; done\"",
     "start": "npm --prefix visualizer-react run server",
     "dev": "concurrently -k -n server,client -c cyan,magenta \"npm --prefix visualizer-react run dev:server\" \"npm --prefix visualizer-react run dev\"",
     "server": "npm --prefix visualizer-react run server",
-    "client": "npm --prefix visualizer-react run dev",
-    "visualizer": "npm --prefix visualizer-react run server"
+    "client": "npm --prefix visualizer-react run dev"
   }
 }
