@@ -10,9 +10,109 @@ import { serveStatic } from './static.mjs';
 
 const PROJECT_ROOT = path.resolve(VISUALIZER_DIR, '..');
 
+// ------------------------------
+// Caching, concurrency & logging
+// ------------------------------
+
+const APP_LIST_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function makeTTLCache(ttlMs) {
+  let data = null;
+  let expiry = 0;
+  let hits = 0;
+  let misses = 0;
+  return {
+    get() {
+      const now = Date.now();
+      if (data && now < expiry) {
+        hits++;
+        return { hit: true, value: data };
+      }
+      misses++;
+      return { hit: false, value: null };
+    },
+    set(v) {
+      data = v;
+      expiry = Date.now() + ttlMs;
+    },
+    invalidate() {
+      data = null;
+      expiry = 0;
+    },
+    metrics() {
+      return { hits, misses };
+    }
+  };
+}
+
+// Simple concurrency limiter (p-limit like)
+function pLimit(concurrency) {
+  let active = 0;
+  const queue = [];
+  const runNext = () => {
+    if (active >= concurrency) return;
+    const item = queue.shift();
+    if (!item) return;
+    active++;
+    const { fn, resolve, reject } = item;
+    Promise.resolve()
+      .then(fn)
+      .then(
+        (v) => {
+          active--;
+          resolve(v);
+          runNext();
+        },
+        (e) => {
+          active--;
+          reject(e);
+          runNext();
+        }
+      );
+  };
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      runNext();
+    });
+}
+
+// Retry helper
+async function withRetries(fn, retries = 2, baseDelayMs = 120) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) {
+        const delay = baseDelayMs * (attempt + 1);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// App list cache (enriched)
+const appListCache = makeTTLCache(APP_LIST_TTL_MS);
+
+// Icon cache keyed by hash(appPath)+size
+const iconCache = new Map(); // key -> { pngPath, sourceMTime }
+const inFlightIconTasks = new Map(); // key -> Promise<string|null>
+let iconCacheHits = 0;
+let iconCacheMisses = 0;
+
+function logCacheMetrics() {
+  const m = appListCache.metrics();
+  console.log(
+    `[perf] apps cache hits=${m.hits} misses=${m.misses} | icon hits=${iconCacheHits} misses=${iconCacheMisses}`
+  );
+}
+
 // (Removed) getScreenTimeTopApps helper — unused
 
-// Utility: list installed apps by scanning standard folders
+// Utility: list installed apps by scanning standard folders (parallel)
 async function listInstalledApps() {
   const dirs = [
     '/Applications',
@@ -23,22 +123,29 @@ async function listInstalledApps() {
   const seen = new Set();
   const apps = [];
 
-  for (const dir of dirs) {
-    try {
-      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-      for (const ent of entries) {
-        if (ent.isDirectory() && ent.name.endsWith('.app')) {
-          const fullPath = path.join(dir, ent.name);
-          // Derive a human name from folder name (strip .app)
-          const base = ent.name.replace(/\.app$/i, '');
-          if (!seen.has(base)) {
-            seen.add(base);
-            apps.push({ name: base, path: fullPath });
-          }
+  const dirEntries = await Promise.all(
+    dirs.map(async (dir) => {
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        return { dir, entries };
+      } catch (e) {
+        // Ignore missing or unreadable dirs
+        return { dir, entries: [] };
+      }
+    })
+  );
+
+  for (const { dir, entries } of dirEntries) {
+    for (const ent of entries) {
+      if (ent.isDirectory() && ent.name.endsWith('.app')) {
+        const fullPath = path.join(dir, ent.name);
+        // Derive a human name from folder name (strip .app)
+        const base = ent.name.replace(/\.app$/i, '');
+        if (!seen.has(base)) {
+          seen.add(base);
+          apps.push({ name: base, path: fullPath });
         }
       }
-    } catch (e) {
-      // Ignore missing dirs
     }
   }
 
@@ -112,35 +219,97 @@ function findIcnsForApp(plist, appPath) {
   return cand;
 }
 
-// Convert icns to png and cache in tmp
+// Compute icon source mtime for invalidation
+function statMTimeSafe(p) {
+  try { return fs.statSync(p).mtimeMs; } catch { return 0; }
+}
+
+// Convert icns to png and cache in tmp (with in-memory cache, invalidation, retries and concurrency limiting)
+const iconLimiter = pLimit(3);
 async function getOrCreateIconPng(appPath, size = 64) {
   const tmp = path.join(os.tmpdir(), 'karabiner-app-icons');
   ensureDir(tmp);
-  const key = `${hashPath(appPath)}-${size}.png`;
+  const keyBase = `${hashPath(appPath)}-${size}`;
+  const key = `${keyBase}.png`;
   const outPng = path.join(tmp, key);
-  if (fs.existsSync(outPng)) return outPng;
+
+  // Determine current source signature
   const plist = await readInfoPlistJSON(appPath);
   const icns = findIcnsForApp(plist, appPath);
-  if (!icns) return null;
-  return new Promise((resolve) => {
-    exec(`sips -s format png ${JSON.stringify(icns)} --out ${JSON.stringify(outPng)}`, (err) => {
-      if (!err && fs.existsSync(outPng)) return resolve(outPng);
-      // Fallback: try QuickLook thumbnail of the app bundle
-      exec(`qlmanage -t -s ${size} -o ${JSON.stringify(tmp)} ${JSON.stringify(appPath)}`, () => {
-        // Find most recent png in tmp for this app hash
-        try {
-          const files = fs.readdirSync(tmp).filter((f) => f.endsWith('.png'));
-          if (files.length) {
-            const full = files.map((f) => ({ f, t: fs.statSync(path.join(tmp, f)).mtimeMs }))
-              .sort((a, b) => b.t - a.t)[0].f;
-            fs.copyFileSync(path.join(tmp, full), outPng);
-            return resolve(outPng);
-          }
-        } catch {}
-        resolve(null);
-      });
+  const sourceMTime = icns ? statMTimeSafe(icns) : statMTimeSafe(path.join(appPath, 'Contents'));
+
+  // Check in-memory cache
+  const cacheKey = `${appPath}|${size}`;
+  const cached = iconCache.get(cacheKey);
+  if (cached && cached.sourceMTime === sourceMTime && fs.existsSync(cached.pngPath)) {
+    iconCacheHits++;
+    return cached.pngPath;
+  }
+  iconCacheMisses++;
+
+  // De-duplicate concurrent generations
+  const inFlight = inFlightIconTasks.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const task = iconLimiter(async () => {
+    // Disk cache short-circuit
+    if (fs.existsSync(outPng)) {
+      iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
+      return outPng;
+    }
+
+    if (icns) {
+      // Try sips first with retries
+      const cmd = `sips -s format png ${JSON.stringify(icns)} --out ${JSON.stringify(outPng)}`;
+      try {
+        await withRetries(() =>
+          new Promise((resolve, reject) =>
+            exec(cmd, (err) => (err ? reject(err) : resolve()))
+          )
+        );
+        if (fs.existsSync(outPng)) {
+          iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
+          return outPng;
+        }
+      } catch (_) {
+        // fallthrough to QuickLook
+      }
+    }
+
+    // Fallback: QuickLook thumbnail of the app bundle
+    const qlCmd = `qlmanage -t -s ${size} -o ${JSON.stringify(tmp)} ${JSON.stringify(appPath)}`;
+    try {
+      await withRetries(() =>
+        new Promise((resolve) => exec(qlCmd, () => resolve()))
+      );
+      // Find most recent png in tmp for this app hash
+      try {
+        const files = fs.readdirSync(tmp).filter((f) => f.endsWith('.png'));
+        if (files.length) {
+          const full = files
+            .map((f) => ({ f, t: fs.statSync(path.join(tmp, f)).mtimeMs }))
+            .sort((a, b) => b.t - a.t)[0].f;
+          fs.copyFileSync(path.join(tmp, full), outPng);
+          iconCache.set(cacheKey, { pngPath: outPng, sourceMTime });
+          return outPng;
+        }
+      } catch {}
+    } catch {}
+
+    return null;
+  })
+    .finally(() => {
+      inFlightIconTasks.delete(cacheKey);
     });
-  });
+
+  inFlightIconTasks.set(cacheKey, task);
+  return task;
+}
+
+// Batch icon processing with concurrency limits
+async function getOrCreateIconsBatch(appPaths, size = 64, concurrency = 3) {
+  const limiter = pLimit(concurrency);
+  return Promise.all(appPaths.map((p) => limiter(() => getOrCreateIconPng(p, size))));
 }
 
 async function enrichApp(app) {
@@ -151,6 +320,31 @@ async function enrichApp(app) {
   const categoryLabel = categoryLabelFromUTI(category);
   const iconUrl = `/api/app-icon?path=${encodeURIComponent(app.path)}`;
   return { name, path: app.path, bundleId, category, categoryLabel, iconUrl };
+}
+
+// Batch enrich with concurrency limit
+async function enrichAppsBatch(apps, concurrency = 3) {
+  const limiter = pLimit(concurrency);
+  return Promise.all(apps.map((app) => limiter(() => enrichApp(app))));
+}
+
+async function getAppsCached(forceRefresh = false) {
+  if (!forceRefresh) {
+    const cached = appListCache.get();
+    if (cached.hit) {
+      console.log('[cache] /api/apps HIT');
+      return cached.value;
+    }
+    console.log('[cache] /api/apps MISS');
+  } else {
+    appListCache.invalidate();
+    console.log('[cache] /api/apps REFRESH');
+  }
+
+  const baseApps = await listInstalledApps();
+  const enriched = await enrichAppsBatch(baseApps, 3);
+  appListCache.set(enriched);
+  return enriched;
 }
 
 const server = createServer(async (req, res) => {
@@ -169,8 +363,9 @@ const server = createServer(async (req, res) => {
       }
 
     if (url.pathname === '/api/apps' && req.method === 'GET') {
-      const baseApps = await listInstalledApps();
-      const enriched = await Promise.all(baseApps.map(enrichApp));
+      const refresh = url.searchParams.get('refresh') === '1';
+      const enriched = await getAppsCached(refresh);
+      logCacheMetrics();
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(enriched));
       return;
     }
@@ -190,7 +385,9 @@ const server = createServer(async (req, res) => {
         } else {
           res.writeHead(404).end();
         }
+        logCacheMetrics();
       } catch (e) {
+        console.error('[icon] generation failed:', e?.message || e);
         res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'icon generation failed' }));
       }
       return;
