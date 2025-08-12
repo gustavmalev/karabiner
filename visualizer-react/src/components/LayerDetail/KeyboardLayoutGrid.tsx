@@ -2,6 +2,8 @@ import {useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode
 import {KeyTile} from '../KeyboardGrid/KeyTile';
 import {numberRow, topRow, homeRow, bottomRow} from '../../utils/keys';
 import type {Command} from '../../types';
+import { useStore } from '../../state/store';
+import { diffConfigsDetailed, type DetailedDiff } from '../../utils/diff';
 
 export function KeyboardLayoutGrid(props: {
   baseKey?: string | null;
@@ -10,6 +12,8 @@ export function KeyboardLayoutGrid(props: {
   keyHandlers: Record<string, (() => void) | undefined>;
 }) {
   const {baseKey, sublayerCommands, tooltipByKey, keyHandlers} = props;
+  const lastSavedConfig = useStore((s) => s.lastSavedConfig);
+  const config = useStore((s) => s.config);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -37,6 +41,32 @@ export function KeyboardLayoutGrid(props: {
     return Math.max(24, Math.min(72, size));
   }, [containerWidth, rows, gap]);
 
+  // Build inner-key dirty map for the current sublayer so we can show +/-/~/↔ badges
+  const dirtyByInnerKey = useMemo(() => {
+    const out: Record<string, 'add' | 'remove' | 'change' | 'move'> = {};
+    if (!baseKey || !config) return out;
+    const det: DetailedDiff = diffConfigsDetailed(lastSavedConfig, config);
+
+    // If the entire sublayer is new, mark existing inner keys as added
+    if (det.layersAdded.includes(baseKey)) {
+      for (const k of Object.keys(sublayerCommands || {})) out[k] = 'add';
+    }
+
+    const entry = det.changedLayers.find((e) => e.key === baseKey && (e as any).type === 'sublayer') as Extract<
+      DetailedDiff['changedLayers'][number],
+      { type: 'sublayer'; sublayer: any }
+    > | undefined;
+    if (!entry || entry.type !== 'sublayer') return out;
+    for (const a of entry.sublayer.added) out[a.key] = 'add';
+    for (const r of entry.sublayer.removed) out[r.key] = 'remove';
+    for (const c of entry.sublayer.changed) out[c.key] = 'change';
+    for (const m of entry.sublayer.moved) {
+      out[m.from] = 'move';
+      out[m.to] = 'move';
+    }
+    return out;
+  }, [baseKey, lastSavedConfig, config, sublayerCommands]);
+
   return (
     <div
       ref={containerRef}
@@ -62,6 +92,7 @@ export function KeyboardLayoutGrid(props: {
                 key={code}
                 code={lower}
                 state={stateForKey}
+                dirty={dirtyByInnerKey[lower]}
                 tooltipContent={tooltipContent}
                 tooltipDelay={0}
                 onClick={keyHandlers[lower]}

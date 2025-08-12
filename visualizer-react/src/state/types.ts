@@ -33,6 +33,7 @@ export interface UISlice {
   keyboardLayout: KeyboardLayout;
   aiKey: string;
   importDialogOpen: boolean;
+  resumeDialogOpen: boolean;
   settings: { showUndoRedo: boolean; maxSnapshots: number };
 
   setCurrentLayerKey: (key: KeyCode | null) => void;
@@ -43,6 +44,8 @@ export interface UISlice {
   setAIKey: (aiKey: string) => void;
   openImportDialog: () => void;
   closeImportDialog: () => void;
+  openResumeDialog: () => void;
+  closeResumeDialog: () => void;
   setSettings: (patch: Partial<{ showUndoRedo: boolean; maxSnapshots: number }>) => void;
 }
 

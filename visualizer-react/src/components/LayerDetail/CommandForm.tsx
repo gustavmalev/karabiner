@@ -18,8 +18,9 @@ export function CommandForm(props: {
   onDelete?: () => void;
   isKeyLevel?: boolean;
   isBlocked?: boolean;
+  baseKey?: string | null;
 }) {
-  const {onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel, isBlocked} = props;
+  const {onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel, isBlocked, baseKey} = props;
 
   const {
     type, setType,
@@ -55,7 +56,20 @@ export function CommandForm(props: {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : (isAIMode ? 'Add with AI' : 'Add Command')}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">{mode === 'edit' ? 'Edit Command' : (isAIMode ? 'Add with AI' : 'Add Command')}</h3>
+        <div className="flex items-center gap-2 text-xs text-default-600">
+          {!isKeyLevel && baseKey && (
+            <span className="inline-flex items-center gap-1 rounded bg-default-200 px-1.5 py-0.5"><span className="text-default-500">Sublayer</span><span className="font-medium">{labelForKey(baseKey)}</span></span>
+          )}
+          {!isKeyLevel && (innerKey || initial?.innerKey) && (
+            <span className="inline-flex items-center gap-1 rounded bg-default-200 px-1.5 py-0.5"><span className="text-default-500">Key</span><span className="font-medium">{labelForKey(innerKey || initial?.innerKey || '')}</span></span>
+          )}
+          {isKeyLevel && baseKey && (
+            <span className="inline-flex items-center gap-1 rounded bg-default-200 px-1.5 py-0.5"><span className="text-default-500">Key</span><span className="font-medium">{labelForKey(baseKey)}</span></span>
+          )}
+        </div>
+      </div>
       <div className="grid grid-cols-1 gap-4">
         <Select
           label="Type"
@@ -128,7 +142,7 @@ export function CommandForm(props: {
         {!isKeyLevel && (
           !isAIMode ? (
             <Autocomplete
-              label="Inner key"
+              label="Key in this sublayer"
               labelPlacement="outside"
               placeholder={`Choose a key${takenKeys.length ? ` — taken: ${takenKeys.join(',')}` : ''}`}
               defaultItems={keyOptions}
@@ -162,7 +176,7 @@ export function CommandForm(props: {
               listboxProps={{
                 topContent: (
                   <div className="px-2 py-1 text-[11px] leading-none text-default-500">
-                    Keys
+                    Keys in sublayer
                   </div>
                 ),
                 hideSelectedIcon: true,
@@ -187,11 +201,11 @@ export function CommandForm(props: {
             <div className="text-sm text-default-600">
               {suggestedKey ? (
                 <div>
-                  Suggested key: <span className="font-semibold">{labelForKey(suggestedKey)}</span>
+                  Suggested key in sublayer: <span className="font-semibold">{labelForKey(suggestedKey)}</span>
                   {rationale && <div className="mt-1 text-default-500">{rationale}</div>}
                 </div>
               ) : (
-                <div>Click Suggest to propose an inner key based on your command name and availability.</div>
+                <div>Click Suggest to propose a key in this sublayer based on your command name and availability.</div>
               )}
             </div>
           )
@@ -216,7 +230,7 @@ export function CommandForm(props: {
             <Button variant="solid" color="primary" isDisabled={!canSaveEffective} onPress={() => onSave({ type, text, ignore, innerKey: suggestedKey })}>Save</Button>
           </Tooltip>
         ) : (
-          <Tooltip content={hasAIKey ? 'Suggest an inner key' : 'Add your Gemini API key to enable suggestions'} placement="top" motionProps={overlayMotion}>
+          <Tooltip content={hasAIKey ? 'Suggest a key in this sublayer' : 'Add your Gemini API key to enable suggestions'} placement="top" motionProps={overlayMotion}>
             <span className="inline-block">
               <Button
                 variant="solid"
@@ -256,10 +270,10 @@ export function CommandForm(props: {
       </Modal>
 
       {/* Confirm delete inner command */}
-      <Modal open={!!confirmDeleteCmdOpen} onClose={() => setConfirmDeleteCmdOpen(false)} isDismissable={false} isKeyboardDismissDisabled hideCloseButton size="sm">
+      <Modal open={!!confirmDeleteCmdOpen} onClose={() => setConfirmDeleteCmdOpen(false)} isDismissable size="sm">
         <div className="space-y-4">
           <h3 className="text-base font-semibold">Delete Command?</h3>
-          <p className="text-sm text-default-600">This will remove the inner command for key <span className="font-semibold">{innerKey || initial?.innerKey}</span>. This action cannot be undone.</p>
+          <p className="text-sm text-default-600">This will remove the command for key <span className="font-semibold">{labelForKey(innerKey || initial?.innerKey || '')}</span>{baseKey ? <> in sublayer <span className="font-semibold">{labelForKey(baseKey)}</span></> : null}. This action cannot be undone.</p>
           <div className="mt-2 flex justify-end gap-2">
             <Button variant="solid" color="default" className="text-black" onPress={() => setConfirmDeleteCmdOpen(false)} autoFocus>Cancel</Button>
             <Button variant="solid" color="danger" onPress={() => { onDelete?.(); setConfirmDeleteCmdOpen(false); }}>Delete</Button>

@@ -3,11 +3,13 @@ import { useStore } from '../../state/store';
 import { buildKeyClassification } from '../../state/selectors';
 import { KeyTile } from './KeyTile';
 import { numberRow, topRow, homeRow, bottomRow } from '../../utils/keys';
+import { diffConfigsDetailed, type DetailedDiff } from '../../utils/diff';
 // No extra UI elements here to keep layout clean
 
 export function KeyboardGrid() {
   const data = useStore((s) => s.data);
   const config = useStore((s) => s.config);
+  const lastSavedConfig = useStore((s) => s.lastSavedConfig);
   const blockedKeys = useStore((s) => s.blockedKeys);
   const filter = useStore((s) => s.filter);
   const setCurrentLayerKey = useStore((s) => s.setCurrentLayerKey);
@@ -56,6 +58,30 @@ export function KeyboardGrid() {
 
   const filteredRows = useMemo(() => rows.map((r) => r.filter(passesFilter)), [rows, passesFilter]);
 
+  // Build per-base-key dirty map from detailed diff
+  const dirtyByKey = useMemo(() => {
+    const out: Record<string, 'add' | 'remove' | 'change' | 'move'> = {};
+    if (!lastSavedConfig || !config) return out;
+    const det: DetailedDiff = diffConfigsDetailed(lastSavedConfig, config);
+    for (const k of det.layersAdded) out[k] = 'add';
+    for (const k of det.layersRemoved) out[k] = 'remove';
+    for (const entry of det.changedLayers) {
+      // Skip if explicitly marked as add/remove already
+      if (out[entry.key]) continue;
+      if ((entry as any).typeChanged) {
+        out[entry.key] = 'change';
+        continue;
+      }
+      if (entry.type === 'command') {
+        out[entry.key] = 'change';
+      } else if (entry.type === 'sublayer') {
+        const hasMove = entry.sublayer.moved.length > 0;
+        out[entry.key] = hasMove ? 'move' : 'change';
+      }
+    }
+    return out;
+  }, [lastSavedConfig, config]);
+
   const keyHandlers = useMemo(() => {
     const map: Record<string, () => void> = {};
     for (const r of rows) {
@@ -79,6 +105,7 @@ export function KeyboardGrid() {
           key={code}
           code={code}
           state={classify(code)}
+          dirty={dirtyByKey[code]}
           onClick={keyHandlers[code]}
         />
       ))}

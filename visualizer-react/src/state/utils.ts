@@ -22,3 +22,27 @@ export function pick<T extends object, K extends keyof T>(obj: T, keys: readonly
   }
   return out;
 }
+
+// Simple stable deep equality via stable stringify
+function stableStringify(value: any): string {
+  const seen = new WeakSet<any>();
+  const helper = (v: any): any => {
+    if (v === null || typeof v !== 'object') return v;
+    if (seen.has(v)) return undefined; // avoid cycles; treat as undefined
+    seen.add(v);
+    if (Array.isArray(v)) return v.map((x) => helper(x));
+    const obj: Record<string, any> = {};
+    const keys = Object.keys(v).sort();
+    for (const k of keys) obj[k] = helper(v[k]);
+    return obj;
+  };
+  return JSON.stringify(helper(value));
+}
+
+export function deepEqual(a: any, b: any): boolean {
+  try {
+    return stableStringify(a) === stableStringify(b);
+  } catch {
+    return false;
+  }
+}

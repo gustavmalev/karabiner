@@ -11,6 +11,7 @@ type KeyTileProps = {
   onToggleLock?: () => void;
   tooltipContent?: ReactNode;
   tooltipDelay?: number;
+  dirty?: 'add' | 'remove' | 'change' | 'move';
 };
 
 function KeyTileImpl({
@@ -20,6 +21,7 @@ function KeyTileImpl({
   onToggleLock,
   tooltipContent,
   tooltipDelay,
+  dirty,
 }: KeyTileProps) {
   const color: 'primary' | 'success' | 'warning' | 'default' | 'danger' =
     state === 'sublayer'
@@ -41,8 +43,22 @@ function KeyTileImpl({
   const handleToggle = useCallback(() => {
     if (onToggleLock) onToggleLock();
   }, [onToggleLock]);
+  const ringClass = dirty === 'add'
+    ? 'ring-2 ring-success-500 ring-offset-2 ring-offset-background'
+    : dirty === 'remove'
+    ? 'ring-2 ring-danger-500 ring-offset-2 ring-offset-background'
+    : dirty === 'change'
+    ? 'ring-2 ring-warning-500 ring-offset-2 ring-offset-background'
+    : dirty === 'move'
+    ? 'ring-2 ring-default-500 ring-offset-2 ring-offset-background'
+    : '';
+  const badge = dirty === 'add' ? { label: '+', cls: 'bg-success text-white' }
+    : dirty === 'remove' ? { label: '-', cls: 'bg-danger text-white' }
+    : dirty === 'change' ? { label: '~', cls: 'bg-warning text-black' }
+    : dirty === 'move' ? { label: '↔', cls: 'bg-default-400 text-white' }
+    : null;
   return (
-    <div className="relative inline-flex items-center">
+    <div className={`relative inline-flex items-center rounded-medium ${ringClass}`}>
       <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0} motionProps={overlayMotion}>
         <Button
           size="sm"
@@ -68,6 +84,14 @@ function KeyTileImpl({
           aria-hidden="true"
         />
       )}
+      {badge && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full text-[10px] leading-4 text-center ring-1 ring-background ${badge.cls}`}
+          aria-hidden="true"
+        >
+          {badge.label}
+        </span>
+      )}
       {onToggleLock && (
         <Tooltip content="Toggle lock" placement="top" motionProps={overlayMotion}>
           <Button
@@ -92,7 +116,8 @@ const areEqual = (prev: KeyTileProps, next: KeyTileProps) => {
     prev.tooltipDelay === next.tooltipDelay &&
     prev.onClick === next.onClick &&
     prev.onToggleLock === next.onToggleLock &&
-    prev.tooltipContent === next.tooltipContent
+    prev.tooltipContent === next.tooltipContent &&
+    prev.dirty === next.dirty
   );
 };
 

@@ -35,26 +35,13 @@ function App() {
         openImportDialog()
         return
       }
-      // Cancel (revert) on Esc
-      if (key === 'escape' && isDirty) {
-        e.preventDefault()
-        revertToSaved()
-        return
-      }
+      // Note: ESC no longer globally reverts; avoid surprising cancellations while editing
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, openImportDialog, isDirty, revertToSaved])
 
-  useEffect(() => {
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!isDirty) return
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [isDirty])
+  // Removed beforeunload warning: local edits are persisted; no disruptive browser prompt
 
   return (
     <Layout>

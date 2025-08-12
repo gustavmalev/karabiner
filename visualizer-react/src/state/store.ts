@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import type { KeyCode } from '../types';
 import type { StoreSnapshot, NamedSnapshot, StoreState, AppSlice, UISlice, ConfigSlice } from './types';
 import { buildPersisted, loadPersisted, savePersistedAsync } from './persistence';
-import { shallow } from './utils';
+import { shallow, deepEqual } from './utils';
 import { getApps, getConfig, getData } from '../api/client';
 
 const initialBase = () => ({
@@ -47,6 +47,7 @@ const createUISlice = (set: any): UISlice => ({
   keyboardLayout: 'ansi',
   aiKey: '',
   importDialogOpen: false,
+  resumeDialogOpen: false,
   settings: { showUndoRedo: true, maxSnapshots: 100 },
 
   setCurrentLayerKey: (key) => set({ currentLayerKey: key }),
@@ -61,6 +62,8 @@ const createUISlice = (set: any): UISlice => ({
   setAIKey: (aiKey) => set({ aiKey }),
   openImportDialog: () => set({ importDialogOpen: true }),
   closeImportDialog: () => set({ importDialogOpen: false }),
+  openResumeDialog: () => set({ resumeDialogOpen: true }),
+  closeResumeDialog: () => set({ resumeDialogOpen: false }),
   setSettings: (patch) => set((prev: StoreState) => ({ settings: { ...prev.settings, ...patch } } as Partial<StoreState> as StoreState)),
 });
 
@@ -77,7 +80,8 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
   setConfig: (config) => set((prev: StoreState) => {
     const hist = [...prev.history, makeSnapshot(prev as StoreState)];
     if (hist.length > prev.historyLimit) hist.shift();
-    return { config, isDirty: true, history: hist, future: [] } as Partial<StoreState> as StoreState;
+    const dirty = !deepEqual(config, get().lastSavedConfig);
+    return { config, isDirty: dirty, history: hist, future: [] } as Partial<StoreState> as StoreState;
   }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null, lastSavedAt: Date.now() }),
@@ -86,11 +90,12 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
     const last = prev.history[prev.history.length - 1];
     const newHistory = prev.history.slice(0, -1);
     const newFuture = [...prev.future, { config: prev.config } as StoreSnapshot];
+    const dirty = !deepEqual(last.config, get().lastSavedConfig);
     return {
       config: last.config,
       history: newHistory,
       future: newFuture,
-      isDirty: true,
+      isDirty: dirty,
     } as Partial<StoreState> as StoreState;
   }),
   redo: () => set((prev: StoreState) => {
@@ -99,11 +104,12 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
     const newFuture = prev.future.slice(0, -1);
     const newHistory = [...prev.history, { config: prev.config } as StoreSnapshot];
     if (newHistory.length > prev.historyLimit) newHistory.shift();
+    const dirty = !deepEqual(last.config, get().lastSavedConfig);
     return {
       config: last.config,
       history: newHistory,
       future: newFuture,
-      isDirty: true,
+      isDirty: dirty,
     } as Partial<StoreState> as StoreState;
   }),
   revertToSaved: () => set((prev: StoreState) => {
@@ -133,9 +139,10 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
   revertToSnapshot: (id: string) => set((prev: StoreState) => {
     const snap = prev.snapshots.find((s) => s.id === id);
     if (!snap) return {} as StoreState;
+    const dirty = !deepEqual(snap.config, get().lastSavedConfig);
     return {
       config: snap.config,
-      isDirty: true,
+      isDirty: dirty,
       history: [...prev.history, { config: prev.config } as StoreSnapshot],
       future: [],
     } as Partial<StoreState> as StoreState;
@@ -171,11 +178,17 @@ export async function initializeStore() {
       settings: (persisted as any).settings ?? { showUndoRedo: true, maxSnapshots: 100 },
     });
   }
-  const [data, apps] = await Promise.all([getData(), getApps()]);
+  const [data, apps, serverConfig] = await Promise.all([getData(), getApps(), getConfig()]);
   useStore.setState({ data });
   if (!persisted) {
-    const config = await getConfig();
-    useStore.setState({ config, lastSavedConfig: config, lastSavedAt: null, isDirty: false, snapshots: [] });
+    // No local persisted state: initialize from server (applied) config
+    useStore.setState({ config: serverConfig, lastSavedConfig: serverConfig, lastSavedAt: null, isDirty: false, snapshots: [] });
+  } else {
+    // We have local persisted state. Treat serverConfig as the last applied state
+    // and compute whether there are unapplied changes.
+    const local = persisted.config;
+    const isDifferent = !deepEqual(local, serverConfig);
+    useStore.setState({ lastSavedConfig: serverConfig, isDirty: isDifferent, resumeDialogOpen: isDifferent });
   }
   useStore.setState({ apps });
 }

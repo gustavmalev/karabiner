@@ -101,6 +101,46 @@ export function diffConfigsDetailed(current: Config | null | undefined, incoming
   const layersChanged: KeyCode[] = [];
   const changedLayers: DetailedDiff['changedLayers'] = [];
 
+  // Include detailed entries for newly added layers (show their contents)
+  for (const key of layersAdded) {
+    const b = incoming.layers[key];
+    if (!b) continue;
+    if (b.type === 'command') {
+      changedLayers.push({ key, type: 'command', typeChanged: true, from: undefined, to: b });
+    } else if (b.type === 'sublayer') {
+      const bCmds = b.commands || {};
+      const added = Object.keys(bCmds).map((k) => ({ key: k as KeyCode, to: bCmds[k] }));
+      changedLayers.push({
+        key,
+        type: 'sublayer',
+        typeChanged: true,
+        from: undefined,
+        to: b,
+        sublayer: { added, removed: [], changed: [], moved: [] },
+      });
+    }
+  }
+
+  // Include detailed entries for removed layers (show their previous contents)
+  for (const key of layersRemoved) {
+    const a = current?.layers?.[key];
+    if (!a) continue;
+    if (a.type === 'command') {
+      changedLayers.push({ key, type: 'command', typeChanged: true, from: a, to: undefined });
+    } else if (a.type === 'sublayer') {
+      const aCmds = a.commands || {};
+      const removed = Object.keys(aCmds).map((k) => ({ key: k as KeyCode, from: aCmds[k] }));
+      changedLayers.push({
+        key,
+        type: 'sublayer',
+        typeChanged: true,
+        from: a,
+        to: undefined,
+        sublayer: { added: [], removed, changed: [], moved: [] },
+      });
+    }
+  }
+
   for (const key of common) {
     const a = current!.layers[key];
     const b = incoming.layers[key];
