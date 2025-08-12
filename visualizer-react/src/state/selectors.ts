@@ -1,4 +1,4 @@
-import type { StoreState } from './store';
+import type { StoreState } from './types';
 import type { KeyCode, Config, Data, Layer, Command } from '../types';
 
 // Stable empty constants to avoid returning new objects from selectors
@@ -21,6 +21,17 @@ export const selectConfig = (s: StoreState) => s.config;
 export const selectData = (s: StoreState) => s.data;
 export const selectIsDirty = (s: StoreState) => s.isDirty;
 export const selectCurrentLayerKey = (s: StoreState) => s.currentLayerKey;
+export const selectLocks = (s: StoreState) => s.locks;
+export const selectBlockedKeys = (s: StoreState) => s.blockedKeys;
+export const selectKeyboardLayout = (s: StoreState) => s.keyboardLayout;
+export const selectAIKey = (s: StoreState) => s.aiKey;
+export const selectSettings = (s: StoreState) => s.settings;
+export const selectShowUndoRedo = (s: StoreState) => s.settings.showUndoRedo;
+export const selectLastSavedAt = (s: StoreState) => s.lastSavedAt;
+export const selectApps = (s: StoreState) => s.apps;
+export const selectHistoryCount = (s: StoreState) => s.history.length;
+export const selectFutureCount = (s: StoreState) => s.future.length;
+export const selectImportDialogOpen = (s: StoreState) => s.importDialogOpen;
 
 export const selectCurrentLayer = (s: StoreState) => {
   const key = s.currentLayerKey;

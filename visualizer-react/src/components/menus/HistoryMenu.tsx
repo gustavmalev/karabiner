@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button, Dropdown, DropdownMenu, DropdownTrigger, DropdownItem } from '@heroui/react';
-import { useStore, type NamedSnapshot } from '../../state/store';
+import { useStore } from '../../state/store';
+import type { NamedSnapshot } from '../../state/types';
 import { SnapshotsDialog } from './SnapshotsDialog';
 
 function timeAgo(ts: number): string {
