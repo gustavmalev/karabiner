@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo, type CSSProperties } from 'react';
 import { useStore } from '../../state/store';
 import { buildKeyClassification } from '../../state/selectors';
 import { KeyTile } from './KeyTile';
@@ -46,15 +46,27 @@ export function KeyboardGrid() {
   }, [containerWidth, rows, offsets, gap]);
 
 
-  const passesFilter = (code: string) => {
+  const passesFilter = useCallback((code: string) => {
     const cls = classify(code);
     const f = filter;
     if (f === 'all') return true;
     if (f === 'thirdparty') return cls === 'thirdparty';
     return cls === f;
-  };
+  }, [classify, filter]);
 
-  const Row = ({ keys, offsetUnits }: { keys: string[]; offsetUnits: number }) => (
+  const filteredRows = useMemo(() => rows.map((r) => r.filter(passesFilter)), [rows, passesFilter]);
+
+  const keyHandlers = useMemo(() => {
+    const map: Record<string, () => void> = {};
+    for (const r of rows) {
+      for (const code of r) {
+        map[code] = () => setCurrentLayerKey(code);
+      }
+    }
+    return map;
+  }, [setCurrentLayerKey, rows]);
+
+  const Row = useMemo(() => memo(({ keys, offsetUnits }: { keys: string[]; offsetUnits: number }) => (
     <div
       className={"flex"}
       style={{
@@ -62,16 +74,16 @@ export function KeyboardGrid() {
         marginLeft: `calc(var(--key-size) * ${offsetUnits})`,
       }}
     >
-      {keys.filter(passesFilter).map((code) => (
+      {keys.map((code) => (
         <KeyTile
           key={code}
           code={code}
           state={classify(code)}
-          onClick={() => setCurrentLayerKey(code)}
+          onClick={keyHandlers[code]}
         />
       ))}
     </div>
-  );
+  ), (prev, next) => prev.keys === next.keys && prev.offsetUnits === next.offsetUnits), [classify, keyHandlers]);
 
   return (
     <div
@@ -86,10 +98,10 @@ export function KeyboardGrid() {
       }
     >
       {/* Offsets in key units so they scale with size */}
-      <Row keys={numberRow} offsetUnits={0} />
-      <Row keys={topRow} offsetUnits={0.5} />
-      <Row keys={homeRow} offsetUnits={1} />
-      <Row keys={bottomRow} offsetUnits={1.5} />
+      <Row keys={filteredRows[0]} offsetUnits={0} />
+      <Row keys={filteredRows[1]} offsetUnits={0.5} />
+      <Row keys={filteredRows[2]} offsetUnits={1} />
+      <Row keys={filteredRows[3]} offsetUnits={1.5} />
     </div>
   );
 }

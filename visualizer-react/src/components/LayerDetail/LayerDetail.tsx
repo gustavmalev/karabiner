@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../../state/store';
 import { selectCurrentLayer } from '../../state/selectors';
 import { buildCommandFrom, parseTypeTextFrom, getCommandDescription } from '../../utils/commands';
@@ -101,6 +101,38 @@ export function LayerDetail() {
     return layer.commands;
   }, [layer]);
 
+  const takenKeysMemo = useMemo(() => {
+    return [...Object.keys(sublayerCommands || {}), ...(key ? [key] : [])];
+  }, [sublayerCommands, key]);
+
+  const tooltipByKey = useMemo(() => {
+    const map: Record<string, ReactNode> = {};
+    if (sublayerCommands) {
+      for (const [k, cmd] of Object.entries(sublayerCommands)) {
+        map[k] = <CommandPreview command={cmd} />;
+      }
+    }
+    return map;
+  }, [sublayerCommands]);
+
+  const keyHandlers = useMemo(() => {
+    const map: Record<string, (() => void) | undefined> = {};
+    const baseLower = key?.toLowerCase();
+    const existingMap = sublayerCommands || {};
+    for (const code of rows.flat()) {
+      const lower = code.toLowerCase();
+      const isBase = baseLower === lower;
+      if (isBase) {
+        map[lower] = undefined;
+      } else if (existingMap[lower]) {
+        map[lower] = () => setShowCmdModal({ mode: 'edit', cmdKey: lower });
+      } else {
+        map[lower] = () => setShowCmdModal({ mode: 'add', prefill: lower });
+      }
+    }
+    return map;
+  }, [rows, sublayerCommands, key, setShowCmdModal]);
+
   const onDeleteInner = (ik: string) => {
     if (!key || !config || !sublayerCommands) return;
     const prev: Record<string, Layer> = config.layers;
@@ -200,23 +232,15 @@ export function LayerDetail() {
                 const isBase = key?.toLowerCase() === lower;
                 const existing = !!sublayerCommands?.[lower];
                 const stateForKey: 'locked' | 'custom' | 'available' = isBase ? 'locked' : (existing ? 'custom' : 'available');
-                const cmd = existing && sublayerCommands ? sublayerCommands[lower] : undefined;
+                const tooltipContent = tooltipByKey[lower];
                 return (
                   <KeyTile
                     key={code}
                     code={lower}
                     state={stateForKey}
-                    tooltipContent={cmd ? <CommandPreview command={cmd} /> : undefined}
+                    tooltipContent={tooltipContent}
                     tooltipDelay={0}
-                    onClick={
-                      isBase
-                        ? undefined
-                        : () => (
-                            existing
-                              ? setShowCmdModal({ mode: 'edit', cmdKey: lower })
-                              : setShowCmdModal({ mode: 'add', prefill: lower })
-                          )
-                    }
+                    onClick={keyHandlers[lower]}
                   />
                 );
               })}
@@ -247,8 +271,8 @@ export function LayerDetail() {
             }
             onSaveCommand(v);
           }}
-          takenKeys={[...Object.keys(sublayerCommands || {}), ...(key ? [key] : [])]}
-          initial={(() => {
+          takenKeys={takenKeysMemo}
+          initial={useMemo(() => {
             if (!showCmdModal) return undefined;
             if (showCmdModal.mode === 'add') {
               if (showCmdModal.kind === 'key') {
@@ -276,7 +300,7 @@ export function LayerDetail() {
               } as any;
             }
             return undefined;
-          })()}
+          }, [showCmdModal, sublayerCommands, key, config])}
           mode={showCmdModal?.mode || 'add'}
           isKeyLevel={showCmdModal?.kind === 'key'}
           isBlocked={!!(key && !layer && blocked[key])}
@@ -328,7 +352,7 @@ export function LayerDetail() {
 }
 
 // Compact, pretty preview for a bound command (key-level)
-function CommandPreview({ command }: { command: Command }) {
+const CommandPreview = memo(function CommandPreview({ command }: { command: Command }) {
   const apps = useStore((s) => s.apps);
   const parsed = parseTypeTextFrom(command);
 
@@ -452,7 +476,7 @@ function CommandPreview({ command }: { command: Command }) {
   }
   // Fallback
   return <span className="text-default-600">{getCommandDescription(command) || 'Command'}</span>;
-}
+});
 
 function CommandForm({ onCancel, onSave, takenKeys, initial, mode, onDelete, isKeyLevel, isBlocked }: {
   onCancel: () => void;

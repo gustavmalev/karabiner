@@ -1,22 +1,25 @@
 import { labelForKey } from '../../utils/keys';
 import { Button, Tooltip } from '@heroui/react';
 import type { ReactNode } from 'react';
+import { memo, useCallback } from 'react';
 
-export function KeyTile({
-  code,
-  state,
-  onClick,
-  onToggleLock,
-  tooltipContent,
-  tooltipDelay,
-}: {
+type KeyTileProps = {
   code: string;
   state: 'sublayer' | 'custom' | 'available' | 'thirdparty' | 'locked';
   onClick?: () => void;
   onToggleLock?: () => void;
   tooltipContent?: ReactNode;
   tooltipDelay?: number;
-}) {
+};
+
+function KeyTileImpl({
+  code,
+  state,
+  onClick,
+  onToggleLock,
+  tooltipContent,
+  tooltipDelay,
+}: KeyTileProps) {
   const color: 'primary' | 'success' | 'warning' | 'default' | 'danger' =
     state === 'sublayer'
       ? 'primary'
@@ -31,6 +34,12 @@ export function KeyTile({
   const textClass = color === 'default' ? 'text-black' : 'text-white';
   const friendlyState = state === 'custom' ? 'command' : state; // friendlier label than "custom"
   const tooltip = state === 'locked' ? `${labelForKey(code)} — base layer key (locked)` : `${labelForKey(code)} — ${friendlyState}`;
+  const handlePress = useCallback(() => {
+    if (onClick) onClick();
+  }, [onClick]);
+  const handleToggle = useCallback(() => {
+    if (onToggleLock) onToggleLock();
+  }, [onToggleLock]);
   return (
     <div className="relative inline-flex items-center">
       <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0}>
@@ -39,7 +48,7 @@ export function KeyTile({
           variant="solid"
           color={color}
           isDisabled={disabled}
-          onPress={onClick}
+          onPress={handlePress}
           className={`font-medium ${textClass} rounded-medium shadow-sm hover:shadow-md transition-shadow transition-transform will-change-transform hover:-translate-y-[1px]`}
           style={{
             // Prefer CSS var set by parent; fallback to previous clamp sizes
@@ -64,7 +73,7 @@ export function KeyTile({
             size="sm"
             variant="solid"
             color="default"
-            onPress={onToggleLock}
+            onPress={handleToggle}
             className="ml-1 text-black"
           >
             🔒
@@ -74,3 +83,16 @@ export function KeyTile({
     </div>
   );
 }
+
+const areEqual = (prev: KeyTileProps, next: KeyTileProps) => {
+  return (
+    prev.code === next.code &&
+    prev.state === next.state &&
+    prev.tooltipDelay === next.tooltipDelay &&
+    prev.onClick === next.onClick &&
+    prev.onToggleLock === next.onToggleLock &&
+    prev.tooltipContent === next.tooltipContent
+  );
+};
+
+export const KeyTile = memo(KeyTileImpl, areEqual);
