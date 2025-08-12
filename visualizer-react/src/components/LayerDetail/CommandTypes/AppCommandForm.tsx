@@ -1,4 +1,4 @@
-import {Autocomplete, AutocompleteItem, Avatar} from '@heroui/react';
+import { Autocomplete, AutocompleteItem, Avatar } from '../../ui';
 
 export type AppItem = { id: string; label: string; iconUrl?: string; categoryLabel?: string };
 

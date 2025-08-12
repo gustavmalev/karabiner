@@ -30,7 +30,7 @@ function makeTTLCache<T>(ttlMs: number) {
 // Simple concurrency limiter (generic)
 function pLimit<T>(concurrency: number) {
   let active = 0;
-  const queue: Array<{ fn: () => Promise<T>, resolve: (v: T) => void, reject: (e: any) => void }> = [];
+  const queue: Array<{ fn: () => Promise<T>, resolve: (v: T) => void, reject: (e: unknown) => void }> = [];
   const runNext = () => {
     if (active >= concurrency) return;
     const item = queue.shift(); if (!item) return;
@@ -44,7 +44,7 @@ function pLimit<T>(concurrency: number) {
 }
 
 async function withRetries<T>(fn: () => Promise<T>, retries = 2, baseDelayMs = 120): Promise<T> {
-  let lastErr: any;
+  let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try { return await fn(); } catch (e) {
       lastErr = e; if (attempt < retries) await new Promise(r => setTimeout(r, baseDelayMs * (attempt + 1)));
@@ -157,7 +157,8 @@ function findIcnsForApp(plist: any, appPath: string): string | null {
   return cand;
 }
 
-const iconLimiter = pLimit<Buffer | null>(3);
+// Increase concurrency to speed up first-load of many icons
+const iconLimiter = pLimit<Buffer | null>(10);
 export async function getOrCreateIconPNGBuffer(appPath: string, size = 64): Promise<Buffer | null> {
   const keyBase = `${hashPath(appPath)}-${size}`;
   const outPng = path.join(diskCacheDir, `${keyBase}.png`);
@@ -190,7 +191,7 @@ export async function getOrCreateIconPNGBuffer(appPath: string, size = 64): Prom
     if (icns) {
       const cmd = `sips -s format png ${JSON.stringify(icns)} --out ${JSON.stringify(outPng)}`;
       try {
-        await withRetries(() => new Promise<void>((resolve, reject) => exec(cmd, (err) => (err ? reject(err) : resolve()))));
+        await withRetries(() => new Promise<void>((resolve, reject) => exec(cmd, { timeout: 5000 }, (err) => (err ? reject(err) : resolve()))));
         if (fs.existsSync(outPng)) {
           const buf = await fs.promises.readFile(outPng);
           memIconLRU.set(cacheKey, { buf, sourceMTime });
@@ -202,7 +203,7 @@ export async function getOrCreateIconPNGBuffer(appPath: string, size = 64): Prom
 
     const qlCmd = `qlmanage -t -s ${size} -o ${JSON.stringify(diskCacheDir)} ${JSON.stringify(appPath)}`;
     try {
-      await withRetries(() => new Promise<void>((resolve) => exec(qlCmd, () => resolve())));
+      await withRetries(() => new Promise<void>((resolve) => exec(qlCmd, { timeout: 5000 }, () => resolve())));
       try {
         const files = fs.readdirSync(diskCacheDir).filter((f) => f.endsWith('.png'));
         if (files.length) {
@@ -245,7 +246,7 @@ export async function enrichApp(app: AppBase): Promise<AppInfo> {
   return withCategoryLabel;
 }
 
-export async function enrichAppsBatch(apps: AppBase[], concurrency = 3): Promise<AppInfo[]> {
+export async function enrichAppsBatch(apps: AppBase[], concurrency = 10): Promise<AppInfo[]> {
   const limiter = pLimit<AppInfo>(concurrency);
   return Promise.all(apps.map((app) => limiter(() => enrichApp(app))));
 }

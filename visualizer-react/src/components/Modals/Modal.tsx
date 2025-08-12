@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal as HeroModal, ModalContent, ModalBody, ModalHeader, ModalFooter } from '@heroui/react';
+import { HeroModal, ModalContent, ModalBody, ModalHeader, ModalFooter } from '../ui';
 import { overlayMotion } from '../../ui/motion';
 
 type Props = {

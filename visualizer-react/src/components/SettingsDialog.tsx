@@ -1,4 +1,4 @@
-import { Switch, Button, Input } from '@heroui/react';
+import { Switch, Button, Input } from './ui';
 import { Modal } from './Modals/Modal';
 import { useStore } from '../state/store';
 import { exportFullState, importFullState, type ImportMode } from '../state/persistence';

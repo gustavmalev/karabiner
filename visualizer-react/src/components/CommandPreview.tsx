@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { useStore } from '../state/store';
 import type { Command } from '../types';
-import { Avatar } from '@heroui/react';
+import { Avatar } from './ui';
 import { windowCommandItems } from '../data/windowCommands';
 import { parseTypeTextFrom, getCommandDescription } from '../utils/commands';
 import { labelForKey } from '../utils/keys';

@@ -1,4 +1,4 @@
-import { Card, CardBody, CardHeader, Chip, Divider } from '@heroui/react'
+import { Card, CardBody, CardHeader, Chip, Divider } from '../ui'
 import { useStore } from '../../state/store'
 import { selectConflicts } from '../../state/selectors'
 

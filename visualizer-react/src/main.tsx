@@ -4,21 +4,17 @@ import './index.css'
 import './globals.css'
 import App from './App.tsx'
 import { initializeStore } from './state/store'
-import { HeroUIProvider } from '@heroui/react'
+import { ThemeProvider, injectCSSVariables } from './theme'
 
 // Initialize centralized store (hydrates persisted state and fetches data/apps)
 initializeStore();
+// Inject CSS variables for design tokens before rendering
+injectCSSVariables();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HeroUIProvider
-      disableAnimation={false}
-      // Keep framer-motion animations active
-      skipFramerMotionAnimations={false}
-      // Respect user OS settings for reduced motion
-      reducedMotion="user"
-    >
+    <ThemeProvider>
       <App />
-    </HeroUIProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

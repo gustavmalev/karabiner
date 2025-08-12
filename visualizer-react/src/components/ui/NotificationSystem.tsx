@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Button, Card, CardBody } from '@heroui/react';
+import { Button, Card, CardBody } from './index';
 import { useNotifications } from '../../hooks/useNotifications';
 
 export function NotificationSystem() {

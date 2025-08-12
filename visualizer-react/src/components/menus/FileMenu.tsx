@@ -1,4 +1,4 @@
-import { Button, Dropdown, DropdownMenu, DropdownTrigger, DropdownItem } from '@heroui/react';
+import { Button, Dropdown, DropdownMenu, DropdownTrigger, DropdownItem } from '../ui';
 import { useStore } from '../../state/store';
 import { buildPersisted, exportJson } from '../../state/persistence';
 

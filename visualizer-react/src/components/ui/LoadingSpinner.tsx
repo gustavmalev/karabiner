@@ -1,4 +1,4 @@
-import { Spinner } from '@heroui/react';
+import { Spinner } from './index';
 import type { CSSProperties } from 'react';
 
 export function LoadingSpinner({ size = 'sm', label, style }: { size?: 'sm' | 'md' | 'lg'; label?: string; style?: CSSProperties }) {

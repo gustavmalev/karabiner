@@ -1,7 +1,7 @@
 // Lightweight shallow comparison and helpers for Zustand selectors
 // Avoid importing react or the store here to prevent circular deps.
 
-export function shallow<T extends Record<string, any>>(objA: T, objB: T): boolean {
+export function shallow<T extends Record<string, unknown>>(objA: T, objB: T): boolean {
   if (Object.is(objA, objB)) return true;
   if (typeof objA !== 'object' || objA === null || typeof objB !== 'object' || objB === null) return false;
   const aKeys = Object.keys(objA);
@@ -10,7 +10,7 @@ export function shallow<T extends Record<string, any>>(objA: T, objB: T): boolea
   for (let i = 0; i < aKeys.length; i++) {
     const k = aKeys[i]!;
     if (!Object.prototype.hasOwnProperty.call(objB, k)) return false;
-    if (!Object.is((objA as any)[k], (objB as any)[k])) return false;
+    if (!Object.is((objA as Record<string, unknown>)[k], (objB as Record<string, unknown>)[k])) return false;
   }
   return true;
 }
@@ -18,28 +18,29 @@ export function shallow<T extends Record<string, any>>(objA: T, objB: T): boolea
 export function pick<T extends object, K extends keyof T>(obj: T, keys: readonly K[]): Pick<T, K> {
   const out = {} as Pick<T, K>;
   for (const k of keys) {
-    (out as any)[k] = (obj as any)[k];
+    out[k] = obj[k];
   }
   return out;
 }
 
 // Simple stable deep equality via stable stringify
-function stableStringify(value: any): string {
-  const seen = new WeakSet<any>();
-  const helper = (v: any): any => {
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+  const helper = (v: unknown): unknown => {
     if (v === null || typeof v !== 'object') return v;
-    if (seen.has(v)) return undefined; // avoid cycles; treat as undefined
-    seen.add(v);
+    const objV = v as Record<string, unknown>;
+    if (seen.has(objV as object)) return undefined; // avoid cycles; treat as undefined
+    seen.add(objV as object);
     if (Array.isArray(v)) return v.map((x) => helper(x));
-    const obj: Record<string, any> = {};
-    const keys = Object.keys(v).sort();
-    for (const k of keys) obj[k] = helper(v[k]);
+    const obj: Record<string, unknown> = {};
+    const keys = Object.keys(objV).sort();
+    for (const k of keys) obj[k] = helper(objV[k]);
     return obj;
   };
   return JSON.stringify(helper(value));
 }
 
-export function deepEqual(a: any, b: any): boolean {
+export function deepEqual(a: unknown, b: unknown): boolean {
   try {
     return stableStringify(a) === stableStringify(b);
   } catch {

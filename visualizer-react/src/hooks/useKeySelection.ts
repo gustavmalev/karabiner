@@ -1,10 +1,14 @@
 import {useMemo} from 'react';
 
+type CmdModalState =
+  | { mode: 'edit'; cmdKey: string }
+  | { mode: 'add'; prefill: string };
+
 export function useKeySelection(params: {
   rows: string[][];
   baseKey?: string | null;
   sublayerCommands?: Record<string, unknown>;
-  setShowCmdModal: (v: any) => void;
+  setShowCmdModal: (v: CmdModalState) => void;
 }) {
   const {rows, baseKey, sublayerCommands, setShowCmdModal} = params;
 

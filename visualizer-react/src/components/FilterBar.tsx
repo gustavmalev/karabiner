@@ -1,6 +1,6 @@
 import type { Filter } from '../state/types';
 import { useStore } from '../state/store';
-import { Tabs, Tab } from '@heroui/react';
+import { Tabs, Tab } from './ui';
 
 const filters: Filter[] = ['all', 'available', 'sublayer', 'custom', 'thirdparty'];
 

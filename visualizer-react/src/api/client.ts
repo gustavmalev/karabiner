@@ -11,7 +11,7 @@ type RetryOpts = { attempts?: number; baseDelayMs?: number };
 async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit, opts: RetryOpts = {}) {
   const attempts = Math.max(1, Math.min(10, opts.attempts ?? 3));
   const base = Math.max(50, opts.baseDelayMs ?? 250);
-  let lastErr: any;
+  let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       const ctrl = new AbortController();
@@ -25,7 +25,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit, opts
         continue;
       }
       return r;
-    } catch (e: any) {
+    } catch (e: unknown) {
       lastErr = e;
       // network/abort -> backoff
       if (i < attempts - 1) {

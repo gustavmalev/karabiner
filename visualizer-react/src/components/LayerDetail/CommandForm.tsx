@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {Button, Tooltip, Switch, Autocomplete, AutocompleteItem, Input, Select, SelectItem} from '@heroui/react';
+import { Button, Tooltip, Switch, Autocomplete, AutocompleteItem, Input, Select, SelectItem } from '../ui';
 import { overlayMotion } from '../../ui/motion';
 import {Modal} from '../Modals/Modal';
 import {useCommandForm, type CmdType} from '../../hooks/useCommandForm';

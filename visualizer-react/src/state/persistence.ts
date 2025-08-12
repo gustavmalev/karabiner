@@ -1,6 +1,6 @@
 import { SCHEMA_VERSION, zPersisted, type Persisted } from './schema';
 import { migrateToLatest, migrateLegacyLocalStorageToIndexedDB } from './migrations';
-import { db, PERSISTED_ID, BACKUP_ID } from './database';
+import { db, PERSISTED_ID, BACKUP_ID, type PersistedRow } from './database';
 
 const STORAGE_KEY = 'vrx:persisted';
 
@@ -68,8 +68,9 @@ export async function importFullState(file: File, mode: ImportMode = 'replace'):
   let incoming: Persisted;
   try {
     incoming = migrateToLatest(parsed);
-  } catch (e: any) {
-    throw new Error(`Import failed validation: ${e?.message || 'unknown error'}`);
+  } catch (e: unknown) {
+    const msg = (e as { message?: string } | null)?.message || 'unknown error';
+    throw new Error(`Import failed validation: ${msg}`);
   }
   // Load current for merge mode
   const current = await loadPersisted();
@@ -87,7 +88,7 @@ export async function importFullState(file: File, mode: ImportMode = 'replace'):
     if (current) {
       await db.persisted.put({ id: BACKUP_ID, ...current });
     }
-  } catch (e) {
+  } catch (e: unknown) {
     console.warn('Failed to write backup copy before import', e);
   }
   // Write to storage
@@ -99,9 +100,9 @@ export async function loadPersisted(): Promise<Persisted | null> {
   // 1) Try IndexedDB first
   if (hasIndexedDB()) {
     try {
-      const row = await db.persisted.get(PERSISTED_ID);
+      const row: PersistedRow | undefined = await db.persisted.get(PERSISTED_ID);
       if (row) {
-        const { id: _id, ...rest } = row as any;
+        const { id: _id, ...rest } = row;
         const migrated = migrateToLatest(rest);
         // If migration bumped the version, write back
         if (migrated.schemaVersion !== row.schemaVersion) {
@@ -109,7 +110,7 @@ export async function loadPersisted(): Promise<Persisted | null> {
         }
         return migrated;
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('IndexedDB load failed, will try localStorage fallback', e);
     }
   }
@@ -118,7 +119,7 @@ export async function loadPersisted(): Promise<Persisted | null> {
   try {
     const migrated = await migrateLegacyLocalStorageToIndexedDB();
     return migrated;
-  } catch (e) {
+  } catch (e: unknown) {
     console.warn('Failed to load persisted app state (legacy path); ignoring', e);
     return null;
   }
@@ -159,21 +160,21 @@ async function doSave(p: Persisted, onSaved?: () => void) {
       await db.persisted.put({ id: PERSISTED_ID, ...p });
       onSaved?.();
       return;
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('IndexedDB save failed, falling back to localStorage', e);
     }
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
     onSaved?.();
-  } catch (e) {
+  } catch (e: unknown) {
     console.error('Persist save failed (localStorage)', e);
   }
 }
 
 // Public: immediate async save, queued to preserve order
 export function savePersistedAsync(p: Persisted) {
-  saveQueue = saveQueue.then(() => doSave(p)).catch((e) => console.warn('Save queue error', e));
+  saveQueue = saveQueue.then(() => doSave(p)).catch((e: unknown) => console.warn('Save queue error', e));
   return saveQueue;
 }
 
@@ -204,7 +205,7 @@ export function debouncedSavePersisted(p: Persisted, opts: DebounceOptions = {})
     if (toWrite) {
       saveQueue = saveQueue
         .then(() => doSave(toWrite, opts.onSaved))
-        .catch((e) => console.warn('Save queue error', e));
+        .catch((e: unknown) => console.warn('Save queue error', e));
     }
     if (maxTimer !== null) {
       window.clearTimeout(maxTimer);
@@ -225,7 +226,7 @@ export function debouncedSavePersisted(p: Persisted, opts: DebounceOptions = {})
       if (toWrite) {
         saveQueue = saveQueue
           .then(() => doSave(toWrite, opts.onSaved))
-          .catch((e) => console.warn('Save queue error', e));
+          .catch((e: unknown) => console.warn('Save queue error', e));
       }
       if (maxTimer !== null) {
         window.clearTimeout(maxTimer);
@@ -247,7 +248,7 @@ export async function flushDebouncedPersisted() {
     maxTimer = null;
   }
   if (toWrite) {
-    await saveQueue.then(() => doSave(toWrite)).catch((e) => console.warn('Save queue error', e));
+    await saveQueue.then(() => doSave(toWrite)).catch((e: unknown) => console.warn('Save queue error', e));
   }
 }
 

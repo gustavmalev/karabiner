@@ -1,5 +1,5 @@
 import { labelForKey } from '../../utils/keys';
-import { Button, Tooltip } from '@heroui/react';
+import { Button, Tooltip } from '../ui';
 import { overlayMotion } from '../../ui/motion';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

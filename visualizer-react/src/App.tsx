@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Layout } from './components/Layout'
-import { Card, CardBody } from '@heroui/react'
+import { Card, CardBody } from './components/ui'
 import { KeyboardGrid } from './components/KeyboardGrid/KeyboardGrid'
 import { LayerDetail } from './components/LayerDetail/LayerDetail'
 import { useStore } from './state/store'

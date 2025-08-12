@@ -4,7 +4,7 @@ import { selectCurrentLayer, makeSelectBlockedForKey, makeSelectInnerCommands } 
 import { buildCommandFrom, parseTypeTextFrom } from '../../utils/commands';
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
-import { Button, Switch, Card, CardBody, Tooltip } from '@heroui/react';
+import { Button, Switch, Card, CardBody, Tooltip } from '../ui';
 import { overlayMotion } from '../../ui/motion';
 import { KeyboardLayoutGrid } from './KeyboardLayoutGrid';
 import { useKeySelection } from '../../hooks/useKeySelection';

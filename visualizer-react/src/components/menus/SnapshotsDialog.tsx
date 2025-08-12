@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Listbox, ListboxItem, Input } from '@heroui/react';
+import { Button, Listbox, ListboxItem, Input } from '../ui';
 import { Modal } from '../Modals/Modal';
 import { useStore } from '../../state/store';
 import { SnapshotDiff } from './SnapshotDiff';

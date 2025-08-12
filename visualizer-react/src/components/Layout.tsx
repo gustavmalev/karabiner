@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
+import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from './ui';
 import { overlayMotion } from '../ui/motion';
 import { useStore } from '../state/store';
 import { saveConfig, getConfig } from '../api/client';

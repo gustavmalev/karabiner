@@ -1,6 +1,6 @@
 import { create } from 'zustand';
+import type { StoreApi } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import type { KeyCode } from '../types';
 import type { StoreSnapshot, NamedSnapshot, StoreState, AppSlice, UISlice, ConfigSlice } from './types';
 import { buildPersisted, loadPersisted, debouncedSavePersisted, flushDebouncedPersisted } from './persistence';
 import { shallow, deepEqual } from './utils';
@@ -32,14 +32,14 @@ const makeSnapshot = (s: StoreState): StoreSnapshot => ({
 });
 
 // Slice creators
-const createAppSlice = (set: any): AppSlice => ({
+const createAppSlice: (set: StoreApi<StoreState>["setState"]) => AppSlice = (set) => ({
   data: null,
   apps: [],
   setData: (data) => set({ data }),
   setApps: (apps) => set({ apps }),
 });
 
-const createUISlice = (set: any): UISlice => ({
+const createUISlice: (set: StoreApi<StoreState>["setState"]) => UISlice = (set) => ({
   currentLayerKey: null,
   filter: 'all',
   locks: {},
@@ -53,21 +53,21 @@ const createUISlice = (set: any): UISlice => ({
   setCurrentLayerKey: (key) => set({ currentLayerKey: key }),
   setFilter: (filter) => set({ filter }),
   toggleLock: (key) => set((prev: StoreState) => ({
-    locks: { ...prev.locks, [key]: !prev.locks[key] } as Record<KeyCode, boolean>,
-  } as Partial<StoreState> as StoreState)),
+    locks: { ...prev.locks, [key]: !prev.locks[key] },
+  })),
   toggleBlocked: (key) => set((prev: StoreState) => ({
-    blockedKeys: { ...prev.blockedKeys, [key]: !prev.blockedKeys[key] } as Record<KeyCode, boolean>,
-  } as Partial<StoreState> as StoreState)),
+    blockedKeys: { ...prev.blockedKeys, [key]: !prev.blockedKeys[key] },
+  })),
   setKeyboardLayout: (layout) => set({ keyboardLayout: layout }),
   setAIKey: (aiKey) => set({ aiKey }),
   openImportDialog: () => set({ importDialogOpen: true }),
   closeImportDialog: () => set({ importDialogOpen: false }),
   openResumeDialog: () => set({ resumeDialogOpen: true }),
   closeResumeDialog: () => set({ resumeDialogOpen: false }),
-  setSettings: (patch) => set((prev: StoreState) => ({ settings: { ...prev.settings, ...patch } } as Partial<StoreState> as StoreState)),
+  setSettings: (patch) => set((prev: StoreState) => ({ settings: { ...prev.settings, ...patch } })),
 });
 
-const createConfigSlice = (set: any, get: any): ConfigSlice => ({
+const createConfigSlice: (set: StoreApi<StoreState>["setState"], get: StoreApi<StoreState>["getState"]) => ConfigSlice = (set, get) => ({
   config: null,
   lastSavedConfig: null,
   lastSavedAt: null,
@@ -81,7 +81,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
     const hist = [...prev.history, makeSnapshot(prev as StoreState)];
     if (hist.length > prev.historyLimit) hist.shift();
     const dirty = !deepEqual(config, get().lastSavedConfig);
-    return { config, isDirty: dirty, history: hist, future: [] } as Partial<StoreState> as StoreState;
+    return { config, isDirty: dirty, history: hist, future: [] };
   }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false, lastSavedConfig: get().config || null, lastSavedAt: Date.now() }),
@@ -96,7 +96,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
       history: newHistory,
       future: newFuture,
       isDirty: dirty,
-    } as Partial<StoreState> as StoreState;
+    };
   }),
   redo: () => set((prev: StoreState) => {
     if (prev.future.length === 0) return {} as StoreState;
@@ -110,7 +110,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
       history: newHistory,
       future: newFuture,
       isDirty: dirty,
-    } as Partial<StoreState> as StoreState;
+    };
   }),
   revertToSaved: () => set((prev: StoreState) => {
     const saved = prev.lastSavedConfig;
@@ -120,7 +120,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
       isDirty: false,
       history: [],
       future: [],
-    } as Partial<StoreState> as StoreState;
+    };
   }),
   createSnapshot: (name: string) => set((prev: StoreState) => {
     const entry: NamedSnapshot = {
@@ -134,7 +134,7 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
     if (limit > 0) {
       while (list.length > limit) list.shift();
     }
-    return { snapshots: list } as Partial<StoreState> as StoreState;
+    return { snapshots: list };
   }),
   revertToSnapshot: (id: string) => set((prev: StoreState) => {
     const snap = prev.snapshots.find((s) => s.id === id);
@@ -145,11 +145,11 @@ const createConfigSlice = (set: any, get: any): ConfigSlice => ({
       isDirty: dirty,
       history: [...prev.history, { config: prev.config } as StoreSnapshot],
       future: [],
-    } as Partial<StoreState> as StoreState;
+    };
   }),
   deleteSnapshot: (id: string) => set((prev: StoreState) => {
     const list = prev.snapshots.filter((s) => s.id !== id);
-    return { snapshots: list } as Partial<StoreState> as StoreState;
+    return { snapshots: list };
   }),
 });
 
@@ -175,7 +175,7 @@ export async function initializeStore() {
       aiKey: persisted.aiKey,
       isDirty: false,
       snapshots: persisted.snapshots ?? [],
-      settings: (persisted as any).settings ?? { showUndoRedo: true, maxSnapshots: 100 },
+      settings: persisted.settings ?? { showUndoRedo: true, maxSnapshots: 100 },
     });
   }
   const [data, apps, serverConfig] = await Promise.all([getData(), getApps(), getConfig()]);

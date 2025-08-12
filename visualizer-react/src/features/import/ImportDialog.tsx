@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Input, Kbd } from '@heroui/react';
+import { Button, Input, Kbd } from '../../components/ui';
 import { Modal } from '../../components/Modals/Modal';
 import { useStore } from '../../state/store';
 import { zExported } from '../../state/migrations';

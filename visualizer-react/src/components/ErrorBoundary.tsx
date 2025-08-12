@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Card, CardBody } from '@heroui/react';
+import { Button, Card, CardBody } from './ui';
 
 type Props = {
   children: React.ReactNode;
@@ -8,17 +8,17 @@ type Props = {
 };
 
 type State = {
-  error: any | null;
+  error: unknown | null;
 };
 
 export class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null };
 
-  static getDerivedStateFromError(error: any): State {
+  static getDerivedStateFromError(error: unknown): State {
     return { error };
   }
 
-  componentDidCatch(error: any, info: any) {
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
     // Hook for logging/reporting
     this.props.onReport?.({ error, info });
     // eslint-disable-next-line no-console
@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.error) {
-      const message = this.state.error?.message || String(this.state.error);
+      const message = (this.state.error as { message?: string } | null)?.message || String(this.state.error);
       return (
         <div className="p-3">
           <Card className="border">
