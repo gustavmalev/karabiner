@@ -76,8 +76,6 @@ const rules: KarabinerRules[] = [
     },
     p: {
       j: { to: [{ key_code: 'delete_or_backspace', modifiers: ['left_control'] }], description: 'Keypress' }
-    },
-    n: {
     }
   }),
 ];
