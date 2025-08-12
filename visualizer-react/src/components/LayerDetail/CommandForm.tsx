@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {Button, Tooltip, Switch, Autocomplete, AutocompleteItem, Input, Select, SelectItem} from '@heroui/react';
+import { overlayMotion } from '../../ui/motion';
 import {Modal} from '../Modals/Modal';
 import {useCommandForm, type CmdType} from '../../hooks/useCommandForm';
 import {useAISuggestions} from '../../hooks/useAISuggestions';
@@ -117,7 +118,7 @@ export function CommandForm(props: {
         )}
 
         {type === 'raycast' && (
-          <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="right">
+          <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="right" motionProps={overlayMotion}>
             <Switch isSelected={ignore} onValueChange={setIgnore}>
               Open in background
             </Switch>
@@ -152,6 +153,7 @@ export function CommandForm(props: {
               }}
               popoverProps={{
                 offset: 8,
+                motionProps: overlayMotion,
                 classNames: {
                   base: 'rounded-medium',
                   content: 'p-1 border-0 bg-background',
@@ -197,24 +199,24 @@ export function CommandForm(props: {
       </div>
 
       <div className="mt-2 flex justify-end gap-2">
-        <Tooltip content="Close without saving" placement="top">
+        <Tooltip content="Close without saving" placement="top" motionProps={overlayMotion}>
           <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
         </Tooltip>
         {mode === 'edit' && onDelete && (
-          <Tooltip content="Delete this command" placement="top">
+          <Tooltip content="Delete this command" placement="top" motionProps={overlayMotion}>
             <Button variant="solid" color="danger" onPress={() => setConfirmDeleteCmdOpen(true)}>Delete</Button>
           </Tooltip>
         )}
         {!isAIMode ? (
-          <Tooltip content="Save command" placement="top">
+          <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
             <Button variant="solid" color="primary" isDisabled={!canSaveEffective} onPress={() => onSave({ type, text, ignore, innerKey })}>Save</Button>
           </Tooltip>
         ) : suggestedKey ? (
-          <Tooltip content="Save command" placement="top">
+          <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
             <Button variant="solid" color="primary" isDisabled={!canSaveEffective} onPress={() => onSave({ type, text, ignore, innerKey: suggestedKey })}>Save</Button>
           </Tooltip>
         ) : (
-          <Tooltip content={hasAIKey ? 'Suggest an inner key' : 'Add your Gemini API key to enable suggestions'} placement="top">
+          <Tooltip content={hasAIKey ? 'Suggest an inner key' : 'Add your Gemini API key to enable suggestions'} placement="top" motionProps={overlayMotion}>
             <span className="inline-block">
               <Button
                 variant="solid"

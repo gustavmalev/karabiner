@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal as HeroModal, ModalContent, ModalBody, ModalHeader, ModalFooter } from '@heroui/react';
+import { overlayMotion } from '../../ui/motion';
 
 type Props = {
   open: boolean;
@@ -23,6 +24,7 @@ export function Modal({ open, onClose, children, size = 'md', isDismissable = tr
       isDismissable={isDismissable}
       isKeyboardDismissDisabled={isKeyboardDismissDisabled}
       hideCloseButton={hideCloseButton}
+      motionProps={overlayMotion}
     >
       <ModalContent>
         {() => (

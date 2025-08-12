@@ -11,7 +11,13 @@ initializeStore();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HeroUIProvider>
+    <HeroUIProvider
+      disableAnimation={false}
+      // Keep framer-motion animations active
+      skipFramerMotionAnimations={false}
+      // Respect user OS settings for reduced motion
+      reducedMotion="user"
+    >
       <App />
     </HeroUIProvider>
   </StrictMode>,

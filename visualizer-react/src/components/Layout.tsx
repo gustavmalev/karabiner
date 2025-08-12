@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Navbar, NavbarBrand, NavbarContent, Tooltip } from '@heroui/react';
+import { overlayMotion } from '../ui/motion';
 import { useStore } from '../state/store';
 import { saveConfig } from '../api/client';
 import { ImportDialog } from '../features/import/ImportDialog';
@@ -61,7 +62,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <HistoryMenu />
           <FileMenu />
           {showUndoRedo && historyCount > 0 && (
-            <Tooltip content="Undo (Cmd/Ctrl+Z)" placement="bottom">
+            <Tooltip content="Undo (Cmd/Ctrl+Z)" placement="bottom" motionProps={overlayMotion}>
               <div className="inline-block">
                 <Button size="sm" variant="flat" onPress={() => undo()}>
                   <span>Undo</span>
@@ -73,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Tooltip>
           )}
           {showUndoRedo && futureCount > 0 && (
-            <Tooltip content="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)" placement="bottom">
+            <Tooltip content="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)" placement="bottom" motionProps={overlayMotion}>
               <div className="inline-block">
                 <Button size="sm" variant="flat" onPress={() => redo()}>
                   <span>Redo</span>
@@ -87,7 +88,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="hidden sm:block text-xs text-default-500 mr-2 select-none">
             {isDirty ? 'Unsaved changes' : (lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}` : '')}
           </div>
-          <Tooltip content="Save changes" placement="bottom">
+          <Tooltip content="Save changes" placement="bottom" motionProps={overlayMotion}>
             <div className="inline-block">
               <Button variant="solid" color="primary" isDisabled={!isDirty} onPress={onSave}>
                 Save
@@ -95,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </Tooltip>
           {isDirty && (
-            <Tooltip content="Revert to last saved" placement="bottom">
+            <Tooltip content="Revert to last saved" placement="bottom" motionProps={overlayMotion}>
               <div className="inline-block">
                 <Button size="sm" variant="flat" onPress={() => revertToSaved()}>Cancel</Button>
               </div>

@@ -1,5 +1,6 @@
 import { labelForKey } from '../../utils/keys';
 import { Button, Tooltip } from '@heroui/react';
+import { overlayMotion } from '../../ui/motion';
 import type { ReactNode } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -42,14 +43,14 @@ function KeyTileImpl({
   }, [onToggleLock]);
   return (
     <div className="relative inline-flex items-center">
-      <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0}>
+      <Tooltip content={tooltipContent ?? tooltip} placement="top" delay={tooltipDelay ?? 0} motionProps={overlayMotion}>
         <Button
           size="sm"
           variant="solid"
           color={color}
           isDisabled={disabled}
           onPress={handlePress}
-          className={`font-medium ${textClass} rounded-medium shadow-sm hover:shadow-md transition-shadow transition-transform will-change-transform hover:-translate-y-[1px]`}
+          className={`font-medium ${textClass} rounded-medium shadow-sm hover:shadow-md scale-100 transition-shadow transition-transform will-change-transform hover:-translate-y-[1px]`}
           style={{
             // Prefer CSS var set by parent; fallback to previous clamp sizes
             width: 'var(--key-size, clamp(2.4rem, 3.2vw, 3.8rem))',
@@ -68,7 +69,7 @@ function KeyTileImpl({
         />
       )}
       {onToggleLock && (
-        <Tooltip content="Toggle lock" placement="top">
+        <Tooltip content="Toggle lock" placement="top" motionProps={overlayMotion}>
           <Button
             size="sm"
             variant="solid"

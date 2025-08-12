@@ -65,7 +65,7 @@ export function HistoryMenu() {
           ) : null}
           {(
             recent.map((s) => (
-              <DropdownItem key={`snap:${s.id}`}>
+              <DropdownItem key={`snap:${s.id}`} textValue={s.name}>
                 <div className="flex flex-col">
                   <span className="text-sm">{s.name}</span>
                   <span className="text-[10px] text-default-500">{timeAgo(s.createdAt)}</span>

@@ -1,4 +1,5 @@
 import { Button, Tooltip } from '@heroui/react';
+import { overlayMotion } from '../../ui/motion';
 import { useStore } from '../../state/store';
 import { buildPersisted, exportJson } from '../../state/persistence';
 
@@ -15,7 +16,7 @@ export function ExportButton() {
     exportJson(p);
   };
   return (
-    <Tooltip content="Export layout JSON" placement="bottom">
+    <Tooltip content="Export layout JSON" placement="bottom" motionProps={overlayMotion}>
       <div className="inline-block">
         <Button variant="flat" onPress={onExport} isDisabled={!config}>Export</Button>
       </div>

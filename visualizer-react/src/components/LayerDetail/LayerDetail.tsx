@@ -5,6 +5,7 @@ import { buildCommandFrom, parseTypeTextFrom, getCommandDescription } from '../.
 import type { Command, Layer } from '../../types';
 import { Modal } from '../Modals/Modal';
 import { Button, Switch, Card, CardBody, Tooltip, Avatar } from '@heroui/react';
+import { overlayMotion } from '../../ui/motion';
 import { KeyboardLayoutGrid } from './KeyboardLayoutGrid';
 import { useKeySelection } from '../../hooks/useKeySelection';
 import type { CmdType } from '../../hooks/useCommandForm';
@@ -112,7 +113,7 @@ export function LayerDetail() {
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-semibold">Layer Detail</h2>
             {key && !layer && (
-              <Tooltip content="Mark this base key as blocked by a third-party app. You won't be able to add or edit commands while blocked." placement="bottom">
+              <Tooltip content="Mark this base key as blocked by a third-party app. You won't be able to add or edit commands while blocked." placement="bottom" motionProps={overlayMotion}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-default-500">Blocked (3rd-party)</span>
                   <Switch size="sm" isSelected={!!(key && blocked[key])} onValueChange={() => key && toggleBlocked(key)} />
@@ -122,12 +123,12 @@ export function LayerDetail() {
           </div>
           {key && !layer && (
             <div className="flex items-center gap-2">
-              <Tooltip content="Create a sublayer for this key" placement="left">
+              <Tooltip content="Create a sublayer for this key" placement="left" motionProps={overlayMotion}>
                 <Button size="sm" variant="solid" color="primary" onPress={onAddLayer} isDisabled={!!(key && blocked[key])}>
                   Add Layer
                 </Button>
               </Tooltip>
-              <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left">
+              <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left" motionProps={overlayMotion}>
                 <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })} isDisabled={!!(key && blocked[key])}>
                   Add Key
                 </Button>
@@ -138,19 +139,19 @@ export function LayerDetail() {
             <div className="flex items-center gap-2">
               {layer.type === 'sublayer' ? (
                 <>
-                  <Tooltip content="Add a new inner command with AI suggestion" placement="left">
+                  <Tooltip content="Add a new inner command with AI suggestion" placement="left" motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
                   </Tooltip>
-                  <Tooltip content="Delete this sublayer" placement="left">
+                  <Tooltip content="Delete this sublayer" placement="left" motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Layer</Button>
                   </Tooltip>
                 </>
               ) : (
                 <>
-                  <Tooltip content="Edit the command bound to this key" placement="left">
+                  <Tooltip content="Edit the command bound to this key" placement="left" motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'edit', kind: 'key' })}>Edit Command</Button>
                   </Tooltip>
-                  <Tooltip content="Remove this key binding" placement="left">
+                  <Tooltip content="Remove this key binding" placement="left" motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Key</Button>
                   </Tooltip>
                 </>
