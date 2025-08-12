@@ -3,18 +3,18 @@ import path from 'path';
 import os from 'os';
 
 // Ensure directory exists
-export function ensureDir(dir) {
+export function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 // Return persistent icon cache dir, with fallback to project .cache
-export function getIconCacheDir() {
+export function getIconCacheDir(): string {
   const primary = path.join(os.homedir?.() || '', '.karabiner-visualizer', 'icon-cache');
   try {
     if (!os.homedir || !os.homedir()) throw new Error('no homedir');
     ensureDir(primary);
     return primary;
-  } catch (e) {
+  } catch (e: any) {
     const fallback = path.resolve(process.cwd(), '.cache', 'icon-cache');
     console.warn(`[cache] Could not use home cache dir; falling back to ${fallback}. Reason: ${e?.message || e}`);
     ensureDir(fallback);
@@ -25,47 +25,50 @@ export function getIconCacheDir() {
 // Lightweight LRU cache backed by Map
 // - Evicts on either maxEntries or maxSizeBytes
 // - sizeEstimator(value) -> bytes (default 1 per entry)
-export class LRUCache {
-  constructor({ maxEntries = 512, maxSizeBytes = 64 * 1024 * 1024, sizeEstimator = (v) => 1 } = {}) {
-    this.map = new Map();
+export class LRUCache<V = any> {
+  private map = new Map<string, V>();
+  private maxEntries: number;
+  private maxSizeBytes: number;
+  private sizeEstimator: (v: V) => number;
+  private totalSize = 0;
+
+  constructor({ maxEntries = 512, maxSizeBytes = 64 * 1024 * 1024, sizeEstimator = (v: V) => (void v, 1 as number) } = {}) {
     this.maxEntries = maxEntries;
     this.maxSizeBytes = maxSizeBytes;
-    this.sizeEstimator = sizeEstimator;
-    this.totalSize = 0;
+    this.sizeEstimator = sizeEstimator as (v: V) => number;
   }
 
-  _touch(key, value) {
-    // Move to MRU
+  private touch(key: string, value: V) {
     this.map.delete(key);
     this.map.set(key, value);
   }
 
-  get(key) {
+  get(key: string): V | undefined {
     if (!this.map.has(key)) return undefined;
-    const value = this.map.get(key);
-    this._touch(key, value);
+    const value = this.map.get(key)!;
+    this.touch(key, value);
     return value;
   }
 
-  set(key, value) {
+  set(key: string, value: V) {
     const exists = this.map.has(key);
     if (exists) {
-      const old = this.map.get(key);
+      const old = this.map.get(key)!;
       this.totalSize -= this.sizeEstimator(old);
       this.map.delete(key);
     }
     this.map.set(key, value);
     this.totalSize += this.sizeEstimator(value);
-    this._evictIfNeeded();
+    this.evictIfNeeded();
   }
 
-  has(key) {
+  has(key: string) {
     return this.map.has(key);
   }
 
-  delete(key) {
+  delete(key: string) {
     if (!this.map.has(key)) return false;
-    const v = this.map.get(key);
+    const v = this.map.get(key)!;
     this.totalSize -= this.sizeEstimator(v);
     return this.map.delete(key);
   }
@@ -75,22 +78,20 @@ export class LRUCache {
     this.totalSize = 0;
   }
 
-  _evictIfNeeded() {
-    // Evict by entries
+  private evictIfNeeded() {
     while (this.map.size > this.maxEntries) {
-      const oldestKey = this.map.keys().next().value;
+      const oldestKey = this.map.keys().next().value as string;
       this.delete(oldestKey);
     }
-    // Evict by size
     while (this.totalSize > this.maxSizeBytes && this.map.size > 0) {
-      const oldestKey = this.map.keys().next().value;
+      const oldestKey = this.map.keys().next().value as string;
       this.delete(oldestKey);
     }
   }
 }
 
 // Compute directory size (non-recursive)
-export async function getDirSizeBytes(dir) {
+export async function getDirSizeBytes(dir: string): Promise<number> {
   try {
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
     let total = 0;
@@ -109,9 +110,9 @@ export async function getDirSizeBytes(dir) {
 
 // Prune files by mtime when exceeding maxBytes
 // Deletes oldest files until below maxBytes * lowWatermarkRatio
-export async function pruneByMTime(dir, maxBytes, lowWatermarkRatio = 0.9) {
+export async function pruneByMTime(dir: string, maxBytes: number, lowWatermarkRatio = 0.9) {
   const result = { prunedFiles: 0, prunedBytes: 0, finalSize: 0 };
-  let files = [];
+  let files: Array<{ full: string; size: number; mtime: number }> = [];
   try {
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
     for (const ent of entries) {

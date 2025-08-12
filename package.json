@@ -14,10 +14,10 @@
   "scripts": {
     "build": "tsm rules.ts",
     "watch": "nodemon --exec yarn build -e ts",
-    "start": "node visualizer-react/server/index.mjs",
-    "dev": "concurrently -k -n server,client -c cyan,magenta \"npm --prefix visualizer-react run server\" \"npm --prefix visualizer-react run dev\"",
+    "start": "npm --prefix visualizer-react run server",
+    "dev": "concurrently -k -n server,client -c cyan,magenta \"npm --prefix visualizer-react run dev:server\" \"npm --prefix visualizer-react run dev\"",
     "server": "npm --prefix visualizer-react run server",
     "client": "npm --prefix visualizer-react run dev",
-    "visualizer": "node visualizer-react/server/index.mjs"
+    "visualizer": "npm --prefix visualizer-react run server"
   }
 }
