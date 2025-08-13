@@ -1,8 +1,8 @@
-import { Switch, Button, Input } from './ui';
+import { Switch, Button, Input, Select, SelectItem } from './ui';
 import { Modal } from './Modals/Modal';
 import { useStore } from '../state/store';
 import { exportFullState, importFullState, type ImportMode } from '../state/persistence';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useStore((s) => s.settings);
@@ -13,6 +13,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <Modal open={open} onClose={onClose} size="sm">
@@ -74,24 +75,37 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
                 <div className="text-sm">Import backup</div>
                 <div className="text-xs text-default-500">Choose a JSON file previously exported.</div>
               </div>
-              <input
-                aria-label="Import file"
-                type="file"
-                accept="application/json"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  aria-label="Import file"
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+                <Button size="sm" variant="flat" onPress={() => fileInputRef.current?.click()}>
+                  {file ? 'Change file' : 'Choose file'}
+                </Button>
+                <div className="text-xs text-default-500 max-w-[200px] truncate">{file ? file.name : 'No file selected'}</div>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-4">
               <div className="text-xs text-default-500">Conflict resolution</div>
-              <select
-                aria-label="Import mode"
-                className="border rounded px-2 py-1 text-sm bg-transparent"
-                value={importMode}
-                onChange={(e) => setImportMode(e.target.value as ImportMode)}
-              >
-                <option value="merge">Merge (keep existing)</option>
-                <option value="replace">Replace (overwrite all)</option>
-              </select>
+              <div className="w-56">
+                <Select
+                  aria-label="Import mode"
+                  selectedKeys={new Set([importMode])}
+                  onSelectionChange={(keys) => {
+                    const v = Array.from(keys as Set<string>)[0] as ImportMode | undefined;
+                    if (v) setImportMode(v);
+                  }}
+                  size="sm"
+                >
+                  <SelectItem key="merge" description="Keep existing data when conflicts occur">Merge</SelectItem>
+                  <SelectItem key="replace" description="Overwrite all existing data">Replace</SelectItem>
+                </Select>
+              </div>
             </div>
             <div className="flex justify-end">
               <Button

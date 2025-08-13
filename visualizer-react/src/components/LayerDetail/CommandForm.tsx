@@ -124,12 +124,14 @@ export function CommandForm(props: {
             <Button size="sm" variant="solid" color={isRecording ? 'danger' : 'secondary'} onPress={() => setIsRecording(r => !r)}>
               {isRecording ? 'Stop' : 'Record'}
             </Button>
-            <div className="text-sm text-default-600 min-h-6">
+            <button
+              type="button"
+              className="text-sm text-default-600 min-h-6 px-2 py-1 rounded hover:bg-default-100 transition-colors cursor-pointer"
+              onClick={() => { if (keyPress.key_code) { setKeyPress({}); setText(''); } }}
+              title={keyPress.key_code ? 'Click to clear' : ''}
+            >
               {recordedLabel || (isRecording ? 'Press a key combo…' : 'No key captured')}
-            </div>
-            {keyPress.key_code && (
-              <Button size="sm" variant="flat" onPress={() => { setKeyPress({}); setText(''); }}>Clear</Button>
-            )}
+            </button>
           </div>
         )}
 
@@ -145,10 +147,12 @@ export function CommandForm(props: {
         )}
 
         {type === 'raycast' && (
-          <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="right" motionProps={overlayMotion}>
-            <Switch isSelected={ignore} onValueChange={setIgnore}>
-              Open in background
-            </Switch>
+          <Tooltip content={"If enabled, uses 'open -g' so Raycast opens in the background and doesn't take focus"} placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
+            <Switch
+              size="sm"
+              isSelected={ignore}
+              onValueChange={(v) => setIgnore(v)}
+            />
           </Tooltip>
         )}
 
@@ -231,16 +235,16 @@ export function CommandForm(props: {
       </div>
 
       <div className="mt-2 flex justify-end gap-2">
-        <Tooltip content="Close without saving" placement="top" motionProps={overlayMotion}>
+        <Tooltip content="Close without saving" placement="top" delay={120} closeDelay={60} motionProps={overlayMotion}>
           <Button variant="solid" color="default" className="text-black" onPress={onCancel}>Cancel</Button>
         </Tooltip>
         {mode === 'edit' && onDelete && (
-          <Tooltip content="Delete this command" placement="top" motionProps={overlayMotion}>
+          <Tooltip content="Delete this command" placement="top" delay={120} closeDelay={60} motionProps={overlayMotion}>
             <Button variant="solid" color="danger" onPress={() => setConfirmDeleteCmdOpen(true)}>Delete</Button>
           </Tooltip>
         )}
         {!isAIMode ? (
-          <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
+          <Tooltip content="Save command" placement="top" delay={120} closeDelay={60} motionProps={overlayMotion}>
             <Button
               variant="solid"
               color="primary"
@@ -262,7 +266,7 @@ export function CommandForm(props: {
             </Button>
           </Tooltip>
         ) : suggestedKey ? (
-          <Tooltip content="Save command" placement="top" motionProps={overlayMotion}>
+          <Tooltip content="Save command" placement="top" delay={120} closeDelay={60} motionProps={overlayMotion}>
             <Button
               variant="solid"
               color="primary"
@@ -284,7 +288,7 @@ export function CommandForm(props: {
             </Button>
           </Tooltip>
         ) : (
-          <Tooltip content={hasAIKey ? 'Suggest a key in this sublayer' : 'Add your Gemini API key to enable suggestions'} placement="top" motionProps={overlayMotion}>
+          <Tooltip content={hasAIKey ? 'Suggest a key in this sublayer' : 'Add your Gemini API key to enable suggestions'} placement="top" delay={120} closeDelay={60} motionProps={overlayMotion}>
             <span className="inline-block">
               <Button
                 variant="solid"

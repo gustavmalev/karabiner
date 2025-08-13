@@ -60,6 +60,19 @@ export function useCommandForm(params: {
     if (type === 'window') setWindowQuery(getWindowLabel(text));
   }, [type, text, getWindowLabel]);
 
+  // reset per-type inputs when switching types to avoid stale carry-over
+  useEffect(() => {
+    // clear common text when type changes (unless editing existing with preset text and same type)
+    // always reset auxiliary per-type UI state
+    setWindowQuery('');
+    setKeyPress({});
+    setIsRecording(false);
+    setIgnore(false);
+    if (!initial || initial.type !== type) {
+      setText('');
+    }
+  }, [type]);
+
   // key recording
   const [isRecording, setIsRecording] = useState(false);
   const [keyPress, setKeyPress] = useState<KeyPress>({});

@@ -169,12 +169,12 @@ export function LayerDetail() {
           </div>
           {key && !layer && (
             <div className="flex items-center gap-2">
-              <Tooltip content="Create a sublayer for this key" placement="left" motionProps={overlayMotion}>
+              <Tooltip content="Create a sublayer for this key" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                 <Button size="sm" variant="solid" color="primary" onPress={onAddLayer} isDisabled={!!(key && blockedForKey)}>
                   Add Layer
                 </Button>
               </Tooltip>
-              <Tooltip content="Bind a command directly to this key (no sublayer)" placement="left" motionProps={overlayMotion}>
+              <Tooltip content="Bind a command directly to this key (no sublayer)" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                 <Button size="sm" variant="flat" color="secondary" onPress={() => setShowCmdModal({ mode: 'add', kind: 'key' })} isDisabled={!!(key && blockedForKey)}>
                   Add Key
                 </Button>
@@ -185,19 +185,19 @@ export function LayerDetail() {
             <div className="flex items-center gap-2">
               {layer.type === 'sublayer' ? (
                 <>
-                  <Tooltip content="Add a new inner command with AI suggestion" placement="left" motionProps={overlayMotion}>
+                  <Tooltip content="Add a new inner command with AI suggestion" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'add' })}>Add with AI</Button>
                   </Tooltip>
-                  <Tooltip content="Delete this sublayer" placement="left" motionProps={overlayMotion}>
+                  <Tooltip content="Delete this sublayer" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Layer</Button>
                   </Tooltip>
                 </>
               ) : (
                 <>
-                  <Tooltip content="Edit the command bound to this key" placement="left" motionProps={overlayMotion}>
+                  <Tooltip content="Edit the command bound to this key" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="secondary" onPress={() => setShowCmdModal({ mode: 'edit', kind: 'key' })}>Edit Command</Button>
                   </Tooltip>
-                  <Tooltip content="Remove this key binding" placement="left" motionProps={overlayMotion}>
+                  <Tooltip content="Remove this key binding" placement="bottom" delay={120} closeDelay={60} motionProps={overlayMotion}>
                     <Button size="sm" variant="solid" color="danger" onPress={() => setConfirmDeleteOpen(true)}>Delete Key</Button>
                   </Tooltip>
                 </>
@@ -234,7 +234,7 @@ export function LayerDetail() {
           </div>
         )}
 
-        <Modal open={!!showCmdModal} onClose={() => setShowCmdModal(null)} isDismissable={false} isKeyboardDismissDisabled hideCloseButton>
+        <Modal open={!!showCmdModal} onClose={() => setShowCmdModal(null)} isDismissable hideCloseButton>
           <CommandForm
             onCancel={() => setShowCmdModal(null)}
             onSave={(v: { type: CmdType; text: string; ignore?: boolean; innerKey: string }) => {
